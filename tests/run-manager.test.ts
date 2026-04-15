@@ -30,11 +30,15 @@ describe("RunManager", () => {
 		let manifest = await rm.getManifest();
 		expect(manifest.status).toBe("running");
 
-		await rm.finalizeRun({ total: 10 });
+		await rm.finalizeRun({ total_concepts: 10, fragile_concepts: 2, unanimous_concepts: 4 });
 		manifest = await rm.getManifest();
 		expect(manifest.status).toBe("completed");
 		expect(manifest.finished_at).toBeDefined();
-		expect(manifest.results).toEqual({ total: 10 });
+		expect(manifest.results).toEqual({
+			total_concepts: 10,
+			fragile_concepts: 2,
+			unanimous_concepts: 4,
+		});
 	});
 
 	it("T-RM-03: persist extraction pass", async () => {
