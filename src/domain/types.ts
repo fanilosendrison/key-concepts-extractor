@@ -183,16 +183,23 @@ export interface QualityReport {
 	corrections: QualityCorrection[];
 }
 
+// NIB-M-RELEVANCE-CONTROLLER §4.3 + NIB-M-LLM-PAYLOADS Types 5/6/7:
+// RC wire shapes use `term`/`justification` (QC uses `target`/`reason`).
 export interface RelevanceRemoval {
-	target: string;
-	reason: string;
+	term: string;
 	flagged_by: "claude" | "gpt";
 	confirmed_by: "claude" | "gpt" | null;
+	justification_flagger: string;
+	justification_confirmer: string;
 }
 
 export interface RelevanceRetention {
-	target: string;
-	defense: string;
+	term: string;
+	flagged_by: "claude" | "gpt";
+	defended_by: "claude" | "gpt";
+	justification_flagger: string;
+	counter_argument_defender: string;
+	final_decision: string;
 }
 
 export interface RelevanceReport {

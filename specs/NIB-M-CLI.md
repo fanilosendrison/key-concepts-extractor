@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/cli
 status: approved
+validates: [src/cli/**, tests/cli.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

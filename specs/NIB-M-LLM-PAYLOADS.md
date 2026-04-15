@@ -4,6 +4,7 @@ type: nib-module
 version: "0.3.0"
 scope: key-concepts-extractor/llm-payloads
 status: approved
+validates: [src/domain/control-prompts.ts, src/infra/provider-shared.ts, src/infra/anthropic-adapter.ts, src/infra/openai-adapter.ts, src/infra/google-adapter.ts, tests/contracts.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

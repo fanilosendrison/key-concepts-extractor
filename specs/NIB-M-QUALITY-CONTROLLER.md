@@ -4,6 +4,7 @@ type: nib-module
 version: "1.1.0"
 scope: key-concepts-extractor/quality-controller
 status: approved
+validates: [src/domain/quality-controller.ts, tests/quality-controller.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

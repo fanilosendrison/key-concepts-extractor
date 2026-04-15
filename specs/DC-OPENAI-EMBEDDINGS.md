@@ -5,6 +5,7 @@ version: "1.0.0"
 dependency_version: "v1"
 scope: openai-embeddings-api
 status: approved
+validates: [src/infra/openai-adapter.ts, src/infra/provider-shared.ts, tests/contracts.test.ts]
 consumers: [claude-code]
 referenced_by: [NIB-M-FUSION-INTER]
 superseded_by: []

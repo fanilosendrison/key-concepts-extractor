@@ -5,6 +5,7 @@ version: "1.0.0"
 dependency_version: "2024-10-22 (API version header)"
 scope: anthropic-api
 status: approved
+validates: [src/infra/anthropic-adapter.ts, src/infra/provider-shared.ts, tests/contracts.test.ts]
 consumers: [claude-code]
 referenced_by: [NIB-M-PROVIDER-ADAPTERS]
 superseded_by: []

@@ -148,7 +148,10 @@ export async function runExtraction(
 			(err as Error & { aborted?: boolean }).aborted = true;
 			throw err;
 		}
-		deps.emit?.("extraction_progress", { completed: allPasses.length, total: EXTRACTION_PASS_COUNT });
+		deps.emit?.("extraction_progress", {
+			completed: allPasses.length,
+			total: EXTRACTION_PASS_COUNT,
+		});
 
 		const anglePasses = await Promise.all(
 			PROVIDER_PAIRS.map(async ({ long, short }) => {
@@ -170,6 +173,9 @@ export async function runExtraction(
 		allPasses.push(...anglePasses);
 	}
 
-	deps.emit?.("extraction_progress", { completed: EXTRACTION_PASS_COUNT, total: EXTRACTION_PASS_COUNT });
+	deps.emit?.("extraction_progress", {
+		completed: EXTRACTION_PASS_COUNT,
+		total: EXTRACTION_PASS_COUNT,
+	});
 	return allPasses;
 }

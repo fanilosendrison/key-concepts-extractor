@@ -58,8 +58,9 @@ export function qualityR3(decisions: QualityR3Decision[]): string {
 // ---------- Relevance ----------
 
 export interface RelevanceR1Flag {
-	target: string;
-	reason: string;
+	term: string;
+	justification: string;
+	confidence?: "certain" | "probable";
 }
 
 export function relevanceR1(flags: RelevanceR1Flag[], notFlaggedCount = 0): string {
@@ -67,9 +68,9 @@ export function relevanceR1(flags: RelevanceR1Flag[], notFlaggedCount = 0): stri
 }
 
 export interface RelevanceR2Review {
-	target: string;
+	term: string;
 	verdict: "confirmed_off_topic" | "defended";
-	reason: string;
+	justification: string;
 }
 
 export function relevanceR2(
@@ -80,7 +81,8 @@ export function relevanceR2(
 }
 
 export interface RelevanceR3Decision {
-	target: string;
+	term: string;
+	origin?: "claude_round1" | "gpt_round2";
 	decision: "removed" | "retained";
 	reasoning: string;
 }

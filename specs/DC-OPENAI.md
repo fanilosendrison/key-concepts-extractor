@@ -5,6 +5,7 @@ version: "1.0.0"
 dependency_version: "v1 (chat completions)"
 scope: openai-chat-api
 status: approved
+validates: [src/infra/openai-adapter.ts, src/infra/provider-shared.ts, tests/contracts.test.ts]
 consumers: [claude-code]
 referenced_by: [NIB-M-PROVIDER-ADAPTERS]
 superseded_by: []

@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/coverage-verifier
 status: approved
+validates: [src/domain/coverage-verifier.ts, tests/coverage-verifier.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---
