@@ -122,6 +122,22 @@ describe("FusionIntraAngle", () => {
 		expect(canon(r1)).toEqual(canon(r3));
 	});
 
+	it("T-FI-GRAN: granularity is the most-frequent value, not the first", () => {
+		// claude is iterated FIRST (CANONICAL_PROVIDERS order) and carries the
+		// MINORITY value: a buggy `members[0].granularity` would pick "system-level"
+		// while the correct mostFrequent picks "model-level" (2/3 majority).
+		const result = fuseIntraAngle({
+			angle: "etats_ideaux",
+			passes: {
+				claude: [rawConcept({ term: "alpha", granularity: "system-level" })],
+				gpt: [rawConcept({ term: "alpha", granularity: "model-level" })],
+				gemini: [rawConcept({ term: "alpha", granularity: "model-level" })],
+			},
+		});
+		expect(result).toHaveLength(1);
+		expect(result[0]?.granularity).toBe("model-level");
+	});
+
 	it("P-02: consensus bounds", () => {
 		const result = fuseIntraAngle({
 			angle: "etats_ideaux",

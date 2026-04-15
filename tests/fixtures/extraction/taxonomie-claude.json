@@ -2,12 +2,14 @@
 	{
 		"term": "variance",
 		"category": "property",
+		"granularity": "system-level",
 		"explicit_in_source": true,
 		"justification": "central question of the research"
 	},
 	{
 		"term": "consistency",
 		"category": "property",
+		"granularity": "system-level",
 		"explicit_in_source": true,
 		"justification": "angle-specific concept"
 	}

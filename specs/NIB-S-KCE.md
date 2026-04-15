@@ -308,16 +308,17 @@ interface RunManifest {
   run_id: string;                     // Format: YYYYMMDD-HHmmss-{4hex}
   status: 'running' | 'completed' | 'failed' | 'stopped';
   created_at: string;                 // ISO 8601
-  finished_at: string | null;
+  finished_at?: string;               // ISO 8601, set on terminal status
   source: 'cli' | 'web';
-  prompt: string | null;
-  input_files: string[];              // Normalized names
+  // Prompt content lives in inputs/prompt.txt (kept out of manifest to
+  // avoid bloating the index file with potentially large payloads).
+  input_files: string[];              // Normalized names; content under inputs/
   config: RunConfig;
-  results: {
+  results?: {
     total_concepts: number;
     fragile_concepts: number;
     unanimous_concepts: number;
-  } | null;
+  };
 }
 interface RunConfig {
   models: Record<ProviderId, string>;
@@ -334,7 +335,7 @@ interface RunConfig {
 ```typescript
 interface PipelineEvent {
   timestamp: string;                  // ISO 8601 with ms
-  phase: 'extraction' | 'fusion_intra' | 'fusion_inter' | 'finalization';
+  phase: 'input' | 'extraction' | 'fusion_intra' | 'fusion_inter' | 'diagnostics' | 'run';
   type: string;                       // See Spec v1.5 §13 for all event types
   payload: Record<string, unknown>;
 }

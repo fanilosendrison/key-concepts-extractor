@@ -14,6 +14,8 @@ const PROVIDER_PAIRS: Array<{ long: ProviderLongId; short: ProviderId }> = [
 	{ long: "google", short: "gemini" },
 ];
 
+const EXTRACTION_PASS_COUNT = CANONICAL_ANGLES.length * PROVIDER_PAIRS.length;
+
 // LLM Payloads v0.2 — Type 1 (Extraction)
 const TYPE1_SYSTEM_PROMPT = `You are a key concept extractor for academic research.
 
@@ -105,8 +107,15 @@ function parseExtractionResponse(raw: string): RawConcept[] {
 			throw new TransientLLMError("Invalid concept entry");
 		}
 		const c = item as Record<string, unknown>;
-		if (typeof c.term !== "string" || typeof c.category !== "string") {
-			throw new TransientLLMError("Concept missing required fields (term, category)");
+		if (
+			typeof c.term !== "string" ||
+			typeof c.category !== "string" ||
+			typeof c.granularity !== "string" ||
+			typeof c.justification !== "string"
+		) {
+			throw new TransientLLMError(
+				"Concept missing required fields (term, category, granularity, justification)",
+			);
 		}
 	}
 	return list as RawConcept[];
@@ -124,7 +133,7 @@ export async function runExtraction(
 			(err as Error & { aborted?: boolean }).aborted = true;
 			throw err;
 		}
-		deps.emit?.("extraction_progress", { completed: allPasses.length, total: 15 });
+		deps.emit?.("extraction_progress", { completed: allPasses.length, total: EXTRACTION_PASS_COUNT });
 
 		const anglePasses = await Promise.all(
 			PROVIDER_PAIRS.map(async ({ long, short }) => {
@@ -146,6 +155,6 @@ export async function runExtraction(
 		allPasses.push(...anglePasses);
 	}
 
-	deps.emit?.("extraction_progress", { completed: 15, total: 15 });
+	deps.emit?.("extraction_progress", { completed: EXTRACTION_PASS_COUNT, total: EXTRACTION_PASS_COUNT });
 	return allPasses;
 }

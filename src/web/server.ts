@@ -83,7 +83,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 		const rm = createRunManager(runsDir);
 		activeRunId = rm.runId;
 		try {
-			await rm.initRun(deps.config ?? DEFAULT_RUN_CONFIG);
+			await rm.initRun(deps.config ?? DEFAULT_RUN_CONFIG, "web");
 		} catch (error) {
 			activeRunId = null;
 			throw error;
@@ -183,6 +183,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 					embeddings: deps.embeddings,
 					baseDir: deps.baseDir,
 					runManager: rm,
+					source: "web",
 					...(deps.config ? { config: deps.config } : {}),
 				},
 			);

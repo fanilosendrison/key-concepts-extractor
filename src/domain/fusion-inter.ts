@@ -137,6 +137,7 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 		}
 
 		const category = mostFrequent(cluster.members.map((m) => m.concept.category));
+		const granularity = mostFrequent(cluster.members.map((m) => m.concept.granularity));
 		const explicit = cluster.members.some((m) => m.concept.explicit_in_source);
 		const justifications = [
 			...new Set(cluster.members.flatMap((m) => m.concept.justifications ?? [])),
@@ -148,7 +149,7 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 			canonical_term: canonical,
 			variants,
 			category,
-			granularity: "system-level",
+			granularity,
 			explicit_in_source: explicit,
 			angle_provenance: angleProv,
 			angles_count: anglesCount,
