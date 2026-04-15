@@ -1,0 +1,53 @@
+{
+  "name": "key-concepts-extractor",
+  "version": "0.1.0",
+  "description": "CLI tool to extract key concepts from text via multiple LLM providers, merge results, and expose a web tracking interface",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "lint": "biome check src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cli",
+    "llm",
+    "concepts",
+    "extraction",
+    "nlp"
+  ],
+  "author": "Fanilo Sendrison <fanilo.sendrison@gmail.com>",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "msw": "^2.13.3",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["msw"]
+  },
+  "dependencies": {
+    "@hono/node-ws": "^1.3.0",
+    "citty": "^0.2.2",
+    "envalid": "^8.1.1",
+    "fastest-levenshtein": "^1.0.16",
+    "hono": "^4.12.14",
+    "nanoid": "^5.1.9",
+    "pino": "^10.3.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "wouter": "^3.9.0",
+    "zod": "^4.3.6"
+  }
+}
