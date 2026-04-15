@@ -57,6 +57,7 @@ Consumed by: ExtractionOrchestrator (parses as RawConcept[]), QualityController/
 
 ```typescript
 interface ProviderAdapter {
+  readonly provider: ProviderLongId;        // 'anthropic' | 'openai' | 'google'
   call(request: LLMRequest): Promise<LLMResponse>;
 }
 ```
