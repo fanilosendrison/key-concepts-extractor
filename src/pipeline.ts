@@ -134,6 +134,7 @@ export async function runPipeline(
 				anthropic: deps.anthropic,
 				openai: deps.openai,
 				emit: (type, payload) => emit("fusion_intra", type, payload),
+				signal: deps.signal,
 			});
 			concepts = quality.correctedList;
 			await runManager.persistIntraAngle(angle, concepts);
@@ -146,6 +147,7 @@ export async function runPipeline(
 				anthropic: deps.anthropic,
 				openai: deps.openai,
 				emit: (type, payload) => emit("fusion_intra", type, payload),
+				signal: deps.signal,
 			});
 			concepts = relevance.filteredList;
 			await runManager.persistIntraAngleRelevance(angle, relevance.report);
@@ -177,6 +179,7 @@ export async function runPipeline(
 			anthropic: deps.anthropic,
 			openai: deps.openai,
 			emit: (type, payload) => emit("fusion_inter", type, payload),
+			signal: deps.signal,
 		});
 		finalConcepts = interQuality.correctedList;
 
@@ -187,6 +190,7 @@ export async function runPipeline(
 			anthropic: deps.anthropic,
 			openai: deps.openai,
 			emit: (type, payload) => emit("fusion_inter", type, payload),
+			signal: deps.signal,
 		});
 		finalConcepts = interRelevance.filteredList;
 
