@@ -6,6 +6,7 @@ import type {
 	AngleId,
 	DiagnosticsReport,
 	MergedOutput,
+	RunConfig,
 	ProviderId,
 	RawConcept,
 	RunManifest,
@@ -14,7 +15,7 @@ import type {
 export interface RunManager {
 	readonly runId: string;
 	readonly runDir: string;
-	initRun(): Promise<void>;
+	initRun(config: RunConfig): Promise<void>;
 	persistExtractionPass(
 		angle: AngleId,
 		provider: ProviderId,
@@ -74,16 +75,19 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 
 		// Idempotent: safe to call twice on the same runDir. Returns early if a
 		// manifest already exists so callers don't have to guard ordering.
-		async initRun() {
+		async initRun(config) {
 			if (existsSync(manifestPath)) return;
 			await mkdir(runDir, { recursive: true });
 			for (const sub of SUBDIRS) {
 				await mkdir(join(runDir, sub), { recursive: true });
 			}
+			// NIB-M-RUN-MANAGER §4.2 : persist resolved config so downstream steps
+			// (persistInterAngle, metadata, history view) can read it from disk.
 			const manifest: RunManifest = {
 				run_id: id,
 				status: "running",
 				created_at: new Date().toISOString(),
+				config: { ...config, models: { ...config.models } },
 			};
 			await writeJson(manifestPath, manifest);
 		},

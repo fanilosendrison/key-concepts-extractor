@@ -92,6 +92,30 @@ export interface PipelineEvent {
 
 export type RunStatus = "running" | "completed" | "failed" | "stopped";
 
+// NIB-M-RUN-MANAGER §4.2 : persisted manifest.config shape. Also the runtime
+// shape consumed by the pipeline (model IDs for metadata + embedding_threshold
+// for fusion-inter). API keys and endpoints live on provider adapters, not here.
+// NB: spec §3.10 reads `Record<ProviderId, string>` ; spec example §4.2 uses
+// long IDs as keys ('anthropic'/'openai'/'google') — we follow the example.
+export interface RunConfig {
+	models: Record<ProviderLongId, string>;
+	embedding_model: string;
+	levenshtein_threshold: number;
+	embedding_threshold: number;
+}
+
+// Defaults per NIB-S-KCE §3.15 "Defaults" table (subset).
+export const DEFAULT_RUN_CONFIG: RunConfig = {
+	models: {
+		anthropic: "claude-opus-4-6",
+		openai: "gpt-5.4",
+		google: "gemini-3.1-pro-preview",
+	},
+	embedding_model: "text-embedding-3-small",
+	levenshtein_threshold: 0.9,
+	embedding_threshold: 0.85,
+};
+
 export interface RunManifest {
 	run_id: string;
 	status: RunStatus;
@@ -99,6 +123,7 @@ export interface RunManifest {
 	finished_at?: string;
 	results?: Record<string, unknown>;
 	error?: string;
+	config?: RunConfig;
 }
 
 export interface QualityCorrection {

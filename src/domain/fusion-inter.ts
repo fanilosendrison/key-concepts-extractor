@@ -1,12 +1,13 @@
 import { mostFrequent } from "./collection-utils.js";
 import type { EmbeddingAdapter } from "./ports.js";
-import type {
-	AngleId,
-	AngleProvenanceEntry,
-	AnglesCount,
-	FinalConcept,
-	MergedConcept,
-	ProviderId,
+import {
+	type AngleId,
+	type AngleProvenanceEntry,
+	type AnglesCount,
+	DEFAULT_RUN_CONFIG,
+	type FinalConcept,
+	type MergedConcept,
+	type ProviderId,
 } from "./types.js";
 
 export interface InterAngleInput {
@@ -15,7 +16,9 @@ export interface InterAngleInput {
 	embeddingThreshold?: number;
 }
 
-export const DEFAULT_EMBEDDING_THRESHOLD = 0.85;
+// Single source of truth for the 0.85 default lives in DEFAULT_RUN_CONFIG
+// (NIB-S-KCE §3.15). Re-exported here for legacy direct callers of fuseInterAngle.
+export const DEFAULT_EMBEDDING_THRESHOLD = DEFAULT_RUN_CONFIG.embedding_threshold;
 
 interface TaggedItem {
 	concept: MergedConcept;
