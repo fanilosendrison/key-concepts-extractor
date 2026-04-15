@@ -4,6 +4,7 @@ import {
 	type AngleId,
 	CANONICAL_PROVIDERS,
 	type Consensus,
+	DEFAULT_RUN_CONFIG,
 	type MergedConcept,
 	type ProviderId,
 	type RawConcept,
@@ -15,7 +16,8 @@ export interface IntraAngleInput {
 	levenshteinThreshold?: number;
 }
 
-const DEFAULT_LEVENSHTEIN_THRESHOLD = 0.9;
+// Single source of truth for the 0.9 default lives in DEFAULT_RUN_CONFIG.
+const DEFAULT_LEVENSHTEIN_THRESHOLD = DEFAULT_RUN_CONFIG.levenshtein_threshold;
 
 interface TaggedConcept {
 	concept: RawConcept;
