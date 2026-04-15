@@ -3,7 +3,7 @@ import { verifyCoverage } from "./domain/coverage-verifier.js";
 import { generateDiagnostics } from "./domain/diagnostics.js";
 import { FatalLLMError } from "./domain/errors.js";
 import { runExtraction } from "./domain/extraction-orchestrator.js";
-import { DEFAULT_EMBEDDING_THRESHOLD, fuseInterAngle } from "./domain/fusion-inter.js";
+import { fuseInterAngle } from "./domain/fusion-inter.js";
 import { fuseIntraAngle } from "./domain/fusion-intra.js";
 import { processInput } from "./domain/input-processor.js";
 import type { EmbeddingAdapter, ProviderAdapter } from "./domain/ports.js";
@@ -12,11 +12,13 @@ import { runRelevanceControl } from "./domain/relevance-controller.js";
 import {
 	CANONICAL_ANGLES,
 	CANONICAL_PROVIDERS,
+	DEFAULT_RUN_CONFIG,
 	type FinalConcept,
 	type InputFile,
 	type MergedConcept,
 	type MergedOutput,
 	type PipelinePhase,
+	type RunConfig,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
 import { createRunManager, type RunManager } from "./infra/run-manager.js";
@@ -31,6 +33,9 @@ export interface PipelineDeps {
 	// run_id return in POST /api/runs) then passes it here. CLI path leaves this undefined.
 	runManager?: RunManager;
 	signal?: AbortSignal | undefined;
+	// NIB-M-RUN-MANAGER §4.2 : resolved at startup. Omit to use DEFAULT_RUN_CONFIG
+	// (useful for tests where model IDs are irrelevant).
+	config?: RunConfig;
 }
 
 export interface PipelineInput {
@@ -49,8 +54,9 @@ export async function runPipeline(
 ): Promise<PipelineResult> {
 	const runsDir = join(deps.baseDir, "runs");
 	const runManager = deps.runManager ?? createRunManager(runsDir);
+	const config = deps.config ?? DEFAULT_RUN_CONFIG;
 	// initRun is idempotent: safe whether the caller already initialized or not.
-	await runManager.initRun();
+	await runManager.initRun(config);
 	const logger = createEventLogger(runManager.runDir);
 
 	const emit = (phase: PipelinePhase, type: string, payload: Record<string, unknown>) => {
@@ -155,6 +161,7 @@ export async function runPipeline(
 		let finalConcepts: FinalConcept[] = await fuseInterAngle({
 			byAngle,
 			embeddings: deps.embeddings,
+			embeddingThreshold: config.embedding_threshold,
 		});
 		emit("fusion_inter", "fusion_inter_complete", { count: finalConcepts.length });
 
@@ -182,10 +189,13 @@ export async function runPipeline(
 		// here and filled in the 2-pass write performed by persistDiagnostics below.
 		const mergedOutput: MergedOutput = {
 			metadata: {
+				// NIB-M-RUN-MANAGER §4.5c : short provider IDs for metadata.models per
+				// spec §3.14. The resolved model IDs (claude-opus-4-6 etc.) live on
+				// manifest.config.models, not here.
 				models: [...CANONICAL_PROVIDERS],
 				angles: CANONICAL_ANGLES,
 				total_passes: CANONICAL_ANGLES.length * CANONICAL_PROVIDERS.length,
-				fusion_similarity_threshold: DEFAULT_EMBEDDING_THRESHOLD,
+				fusion_similarity_threshold: config.embedding_threshold,
 				date: new Date().toISOString().slice(0, 10),
 			},
 			concepts: finalConcepts,

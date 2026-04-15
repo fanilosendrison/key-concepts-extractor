@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LLMResponse, ProviderAdapter } from "../src/domain/ports.js";
+import { DEFAULT_RUN_CONFIG } from "../src/domain/types.js";
 import { createRunManager } from "../src/infra/run-manager.js";
 import { createWebServer, type WebServerDeps, type WebServerHandle } from "../src/web/server.js";
 import { createPipelineHarness } from "./helpers/pipeline-harness.js";
@@ -84,10 +85,10 @@ describe("WebServer", () => {
 		// via RunManager so the listing endpoint sees >1 persisted manifest.
 		const runsDir = join(baseDir, "runs");
 		const rm1 = createRunManager(runsDir);
-		await rm1.initRun();
+		await rm1.initRun(DEFAULT_RUN_CONFIG);
 		await rm1.finalizeRun({});
 		const rm2 = createRunManager(runsDir);
-		await rm2.initRun();
+		await rm2.initRun(DEFAULT_RUN_CONFIG);
 		await rm2.finalizeRun({});
 
 		server = createWebServer(makeDeps(baseDir));

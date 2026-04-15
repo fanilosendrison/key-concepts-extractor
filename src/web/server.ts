@@ -8,7 +8,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
 import type { EmbeddingAdapter, ProviderAdapter } from "../domain/ports.js";
-import type { InputFile } from "../domain/types.js";
+import { DEFAULT_RUN_CONFIG, type InputFile, type RunConfig } from "../domain/types.js";
 import { createEventLogger, type EventListener } from "../infra/event-logger.js";
 import { createRunManager, listRuns, type RunManager } from "../infra/run-manager.js";
 import { runPipeline } from "../pipeline.js";
@@ -19,6 +19,7 @@ export interface WebServerDeps {
 	openai: ProviderAdapter;
 	google: ProviderAdapter;
 	embeddings: EmbeddingAdapter;
+	config?: RunConfig;
 }
 
 export interface WebServerHandle {
@@ -82,7 +83,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 		const rm = createRunManager(runsDir);
 		activeRunId = rm.runId;
 		try {
-			await rm.initRun();
+			await rm.initRun(deps.config ?? DEFAULT_RUN_CONFIG);
 		} catch (error) {
 			activeRunId = null;
 			throw error;
@@ -182,6 +183,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 					embeddings: deps.embeddings,
 					baseDir: deps.baseDir,
 					runManager: rm,
+					...(deps.config ? { config: deps.config } : {}),
 				},
 			);
 		} catch (error) {
