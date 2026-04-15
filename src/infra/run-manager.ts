@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
 	AngleId,
@@ -13,13 +13,15 @@ import type {
 	RelevanceReport,
 	RunConfig,
 	RunManifest,
+	RunSource,
 } from "../domain/types.js";
 import { logger } from "./logger.js";
 
 export interface RunManager {
 	readonly runId: string;
 	readonly runDir: string;
-	initRun(config: RunConfig): Promise<void>;
+	initRun(config: RunConfig, source: RunSource): Promise<void>;
+	setInputFiles(normalizedNames: string[]): Promise<void>;
 	persistExtractionPass(
 		angle: AngleId,
 		provider: ProviderId,
@@ -53,11 +55,23 @@ function generateRunId(): string {
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
-	await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+	// Atomic write: a concurrent reader (listRuns, updateManifest) must never
+	// see a partial JSON. Write to a per-pid temp then rename — rename is atomic
+	// on POSIX filesystems for paths on the same device.
+	const tmp = `${path}.tmp.${process.pid}.${Date.now()}`;
+	await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+	await rename(tmp, path);
 }
 
 async function readJson<T>(path: string): Promise<T> {
 	return JSON.parse(await readFile(path, "utf-8")) as T;
+}
+
+// Backfill defaults for fields added after a manifest was first persisted.
+// Old run dirs (pre-source/input_files) should still load cleanly so the
+// history view doesn't crash on `undefined.length` or similar accesses.
+function backfillManifest(raw: Partial<RunManifest>): RunManifest {
+	return { source: "cli", input_files: [], ...raw } as RunManifest;
 }
 
 export function createRunManager(baseDir: string, runId?: string): RunManager {
@@ -79,21 +93,28 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 
 		// Idempotent: safe to call twice on the same runDir. Returns early if a
 		// manifest already exists so callers don't have to guard ordering.
-		async initRun(config) {
+		async initRun(config, source) {
 			if (existsSync(manifestPath)) return;
 			await mkdir(runDir, { recursive: true });
 			for (const sub of SUBDIRS) {
 				await mkdir(join(runDir, sub), { recursive: true });
 			}
-			// NIB-M-RUN-MANAGER §4.2 : persist resolved config so downstream steps
-			// (persistInterAngle, metadata, history view) can read it from disk.
+			// NIB-M-RUN-MANAGER §4.2 : persist resolved config + source + empty
+			// input_files (filled by setInputFiles after persistInputFile loop) so
+			// the history view can render runs from manifest.json alone.
 			const manifest: RunManifest = {
 				run_id: id,
 				status: "running",
 				created_at: new Date().toISOString(),
+				source,
+				input_files: [],
 				config: { ...config, models: { ...config.models } },
 			};
 			await writeJson(manifestPath, manifest);
+		},
+
+		async setInputFiles(normalizedNames) {
+			await updateManifest({ input_files: [...normalizedNames] });
 		},
 
 		async persistExtractionPass(angle, provider, concepts) {
@@ -187,7 +208,7 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		},
 
 		async getManifest() {
-			return readJson<RunManifest>(manifestPath);
+			return backfillManifest(await readJson<Partial<RunManifest>>(manifestPath));
 		},
 	};
 }
@@ -201,7 +222,7 @@ export async function listRuns(baseDir: string): Promise<RunManifest[]> {
 		const manifestPath = join(baseDir, entry.name, "manifest.json");
 		if (!existsSync(manifestPath)) continue;
 		try {
-			manifests.push(await readJson<RunManifest>(manifestPath));
+			manifests.push(backfillManifest(await readJson<Partial<RunManifest>>(manifestPath)));
 		} catch {
 			// Skip corrupted manifests — per NIB-M-RUN-MANAGER §5
 		}

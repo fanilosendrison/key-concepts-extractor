@@ -19,6 +19,7 @@ import {
 	type MergedOutput,
 	type PipelinePhase,
 	type RunConfig,
+	type RunSource,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
 import { createRunManager, type RunManager } from "./infra/run-manager.js";
@@ -36,6 +37,9 @@ export interface PipelineDeps {
 	// NIB-M-RUN-MANAGER §4.2 : resolved at startup. Omit to use DEFAULT_RUN_CONFIG
 	// (useful for tests where model IDs are irrelevant).
 	config?: RunConfig;
+	// Identifies the entry point that launched the run (manifest.source).
+	// Defaults to "cli" — the web path passes "web" explicitly.
+	source?: RunSource;
 }
 
 export interface PipelineInput {
@@ -56,7 +60,7 @@ export async function runPipeline(
 	const runManager = deps.runManager ?? createRunManager(runsDir);
 	const config = deps.config ?? DEFAULT_RUN_CONFIG;
 	// initRun is idempotent: safe whether the caller already initialized or not.
-	await runManager.initRun(config);
+	await runManager.initRun(config, deps.source ?? "cli");
 	const logger = createEventLogger(runManager.runDir);
 
 	const emit = (phase: PipelinePhase, type: string, payload: Record<string, unknown>) => {
@@ -83,6 +87,7 @@ export async function runPipeline(
 				await runManager.persistInputFile(meta.normalizedName, original.content);
 			}
 		}
+		await runManager.setInputFiles(processed.inputFiles.map((f) => f.normalizedName));
 
 		if (checkSignal()) {
 			await runManager.stopRun();

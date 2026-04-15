@@ -126,10 +126,14 @@ export interface RunManifest {
 	status: RunStatus;
 	created_at: string;
 	finished_at?: string;
+	source: "cli" | "web";
+	input_files: string[];
+	config: RunConfig;
 	results?: Record<string, unknown>;
 	error?: string;
-	config?: RunConfig;
 }
+
+export type RunSource = "cli" | "web";
 
 export interface QualityCorrection {
 	error_type: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
