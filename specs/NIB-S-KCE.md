@@ -179,7 +179,7 @@ interface FinalConcept {
 interface MergedOutput {
   metadata: {
     models: ProviderId[];          // ['claude', 'gpt', 'gemini']
-    angles: AngleId[];                  // All 5 angle IDs
+    angles: readonly AngleId[];         // All 5 angle IDs (frozen via CANONICAL_ANGLES)
     total_passes: number;               // 15
     fusion_similarity_threshold: number; // The embedding threshold used
     date: string;                       // ISO 8601 date (YYYY-MM-DD)
