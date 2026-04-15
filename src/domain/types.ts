@@ -21,9 +21,30 @@ export type Consensus = "1/3" | "2/3" | "3/3";
 
 export type AnglesCount = "1/5" | "2/5" | "3/5" | "4/5" | "5/5";
 
-// TODO: resserrer en union littérale depuis NIB-S §3 en GREEN
-export type ConceptCategory = string;
-export type GranularityLevel = string;
+// Closed sets per NIB-S-KCE §3.14. Mirrored verbatim in the LLM extraction
+// prompt (extraction-orchestrator.ts OUTPUT SCHEMA). Validated fail-closed in
+// parseExtractionResponse so an out-of-set LLM value triggers a transient retry
+// rather than silently flowing through fusion as an unknown category.
+export const CONCEPT_CATEGORIES = [
+	"phenomenon",
+	"method",
+	"metric",
+	"property",
+	"architecture",
+	"tool",
+	"constraint",
+	"context",
+] as const;
+export type ConceptCategory = (typeof CONCEPT_CATEGORIES)[number];
+
+export const GRANULARITY_LEVELS = [
+	"token-level",
+	"model-level",
+	"system-level",
+	"pipeline-level",
+	"domain-level",
+] as const;
+export type GranularityLevel = (typeof GRANULARITY_LEVELS)[number];
 
 // All fields required: shape is contractual with the LLM extraction prompt
 // (see extraction-orchestrator.ts OUTPUT SCHEMA) and propagated as-is through
