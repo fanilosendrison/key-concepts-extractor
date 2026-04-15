@@ -39,17 +39,22 @@ export function parseCli(argv: string[]): ParsedCli {
 	}
 
 	if (command === "run") {
+		const KNOWN_FLAGS = new Set(["--prompt", "--files", "--help"]);
 		let prompt: string | undefined;
 		const files: string[] = [];
 		let i = 1;
 		while (i < args.length) {
 			const arg = args[i];
 			if (arg === "--prompt") {
-				prompt = args[i + 1];
+				const next = args[i + 1];
+				if (next === undefined || KNOWN_FLAGS.has(next)) {
+					return { command: "help", exitCode: 1, usage: USAGE };
+				}
+				prompt = next;
 				i += 2;
 			} else if (arg === "--files") {
 				i++;
-				while (i < args.length && !args[i]?.startsWith("--")) {
+				while (i < args.length && args[i] !== undefined && !KNOWN_FLAGS.has(args[i] as string)) {
 					const p = args[i];
 					if (p) files.push(p);
 					i++;

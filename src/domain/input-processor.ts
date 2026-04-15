@@ -13,7 +13,8 @@ const SEPARATOR = "\n\n---\n\n";
 export function processInput(args: InputProcessorArgs): ProcessedInput {
 	validate(args);
 
-	const prompt = args.prompt?.trim() ? args.prompt.trim() : null;
+	const trimmed = args.prompt?.trim();
+	const prompt = trimmed && trimmed.length > 0 ? trimmed : null;
 	const { descriptors, contents } = normalizeFiles(args.files ?? []);
 	const context = buildContext(prompt, contents);
 

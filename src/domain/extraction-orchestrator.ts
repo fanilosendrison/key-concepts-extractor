@@ -1,9 +1,8 @@
-import { FatalLLMError } from "./errors.js";
+import { TransientLLMError } from "./errors.js";
 import type { LLMRequest, ProviderAdapter } from "./ports.js";
 import {
 	type AngleId,
 	CANONICAL_ANGLES,
-	CANONICAL_PROVIDERS,
 	type ProviderId,
 	type ProviderLongId,
 	type RawConcept,
@@ -95,15 +94,17 @@ function parseExtractionResponse(raw: string): RawConcept[] {
 		? parsed
 		: (parsed as { concepts?: unknown })?.concepts;
 	if (!Array.isArray(list)) {
-		throw new FatalLLMError("Extraction response is neither an array nor has a concepts[] field");
+		throw new TransientLLMError(
+			"Extraction response is neither an array nor has a concepts[] field",
+		);
 	}
 	for (const item of list) {
 		if (typeof item !== "object" || item === null) {
-			throw new FatalLLMError("Invalid concept entry");
+			throw new TransientLLMError("Invalid concept entry");
 		}
 		const c = item as Record<string, unknown>;
 		if (typeof c.term !== "string" || typeof c.category !== "string") {
-			throw new FatalLLMError("Concept missing required fields (term, category)");
+			throw new TransientLLMError("Concept missing required fields (term, category)");
 		}
 	}
 	return list as RawConcept[];
@@ -146,6 +147,3 @@ export async function runExtraction(
 	deps.emit?.("extraction_progress", { completed: 15, total: 15 });
 	return allPasses;
 }
-
-// Re-export for consumers
-export { CANONICAL_PROVIDERS };

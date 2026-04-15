@@ -1,3 +1,4 @@
+import { FatalLLMError, TransientLLMError } from "../domain/errors.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../domain/ports.js";
 import {
 	classifyHttp,
@@ -46,6 +47,13 @@ export function createGoogleAdapter(config: ProviderAdapterConfig): ProviderAdap
 				const data = (await res.json()) as GeminiResponse;
 				const candidate = data.candidates[0];
 				if (!candidate) throw new Error("No candidate in Gemini response");
+				// DC-GOOGLE-GEMINI §5: truncation retriable, safety block fatal
+				if (candidate.finishReason === "MAX_TOKENS") {
+					throw new TransientLLMError("Gemini output truncated (MAX_TOKENS)");
+				}
+				if (candidate.finishReason === "SAFETY") {
+					throw new FatalLLMError("Gemini blocked content (SAFETY)");
+				}
 				const contentParts = candidate.content.parts.filter((p) => !p.thought);
 				return contentParts.map((p) => p.text).join("");
 			});

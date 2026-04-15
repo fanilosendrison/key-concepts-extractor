@@ -1,4 +1,5 @@
 import { distance } from "fastest-levenshtein";
+import { mostFrequent } from "./collection-utils.js";
 import {
 	type AngleId,
 	CANONICAL_PROVIDERS,
@@ -36,27 +37,6 @@ function similarity(a: string, b: string): number {
 	const max = Math.max(a.length, b.length);
 	if (max === 0) return 1;
 	return 1 - distance(a, b) / max;
-}
-
-function mostFrequent<T>(values: T[]): T {
-	if (values.length === 0) throw new Error("mostFrequent: empty array");
-	const counts = new Map<T, { count: number; firstIndex: number }>();
-	values.forEach((v, i) => {
-		const entry = counts.get(v);
-		if (entry) entry.count++;
-		else counts.set(v, { count: 1, firstIndex: i });
-	});
-	let best: T = values[0] as T;
-	let bestCount = -1;
-	let bestFirstIndex = Number.POSITIVE_INFINITY;
-	for (const [value, { count, firstIndex }] of counts) {
-		if (count > bestCount || (count === bestCount && firstIndex < bestFirstIndex)) {
-			best = value;
-			bestCount = count;
-			bestFirstIndex = firstIndex;
-		}
-	}
-	return best;
 }
 
 function consensusFor(providerCount: number): Consensus {
@@ -102,7 +82,11 @@ export function fuseIntraAngle(input: IntraAngleInput): MergedConcept[] {
 		}
 	}
 
-	groups.sort((a, b) => a.normalizedTerm.localeCompare(b.normalizedTerm));
+	groups.sort(
+		(a, b) =>
+			a.normalizedTerm.localeCompare(b.normalizedTerm) ||
+			a.representativeTerm.localeCompare(b.representativeTerm),
+	);
 
 	return groups.map((group) => {
 		const providers: ProviderId[] = [];
