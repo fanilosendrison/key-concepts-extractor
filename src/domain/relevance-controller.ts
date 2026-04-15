@@ -33,31 +33,45 @@ export interface RelevanceOutput<T extends ControllableConcept> {
 	report: RelevanceReport;
 }
 
-// NIB-M-RELEVANCE-CONTROLLER §6 : fail-closed at every R1/R2/R3 trust boundary.
+// NIB-M-RELEVANCE-CONTROLLER §6 + NIB-M-LLM-PAYLOADS Types 5/6/7 :
+// fail-closed at every R1/R2/R3 trust boundary. Wire shape uses term/justification.
+const ConfidenceSchema = z.enum(["certain", "probable"]).optional();
+
 const R1FlagSchema = z.object({
-	target: z.string(),
-	reason: z.string().optional(),
+	term: z.string(),
+	justification: z.string().default(""),
+	confidence: ConfidenceSchema,
 });
 const R1OutputSchema = z.object({
 	flagged_off_topic: z.array(R1FlagSchema).default([]),
 	not_flagged_count: z.number().optional(),
 });
 const R2ReviewSchema = z.object({
-	target: z.string(),
+	term: z.string(),
 	verdict: z.enum(["confirmed_off_topic", "defended"]),
-	reason: z.string().optional(),
+	justification: z.string().default(""),
 });
 const R2OutputSchema = z.object({
 	reviews_of_claude: z.array(R2ReviewSchema).default([]),
 	additional_flags: z.array(R1FlagSchema).default([]),
 });
 const R3DecisionSchema = z.object({
-	target: z.string(),
+	term: z.string(),
+	origin: z.enum(["claude_round1", "gpt_round2"]).optional(),
 	decision: z.enum(["removed", "retained"]),
-	reasoning: z.string().optional(),
+	reasoning: z.string().default(""),
 });
+const R3SummarySchema = z
+	.object({
+		total_evaluated: z.number().optional(),
+		removed: z.number().optional(),
+		retained_after_dispute: z.number().optional(),
+		retained_unanimous: z.number().optional(),
+	})
+	.optional();
 const R3OutputSchema = z.object({
 	final_decisions: z.array(R3DecisionSchema).default([]),
+	summary: R3SummarySchema,
 });
 
 type R1Output = z.infer<typeof R1OutputSchema>;
@@ -96,57 +110,79 @@ export async function runRelevanceControl<T extends ControllableConcept>(
 				},
 			};
 		},
-		// R3 only fires when GPT adds NEW flags Claude hasn't seen.
-		// Defense alone resolves deterministically (disagreement = retention).
-		shouldFireR3: (r2) => r2.additional_flags.length > 0,
+		// NIB-M-RELEVANCE-CONTROLLER §4.2 : R3 fires on disagreement OR additional flags.
+		shouldFireR3: (r2) =>
+			r2.reviews_of_claude.some((r) => r.verdict === "defended") || r2.additional_flags.length > 0,
 		aggregate: ({ r1, r2, r3, mergedList, roundsUsed }) => {
 			const removed: RelevanceRemoval[] = [];
 			const retained: RelevanceRetention[] = [];
 			const termsToRemove = new Set<string>();
 
+			const RETAINED = "retained (désaccord = maintien)";
+
 			for (const flag of r1.flagged_off_topic) {
-				const review = r2.reviews_of_claude.find((r) => r.target === flag.target);
+				const review = r2.reviews_of_claude.find((r) => r.term === flag.term);
 				if (review?.verdict === "confirmed_off_topic") {
-					termsToRemove.add(flag.target.toLowerCase());
+					termsToRemove.add(flag.term.toLowerCase());
 					removed.push({
-						target: flag.target,
-						reason: flag.reason ?? "",
+						term: flag.term,
 						flagged_by: "claude",
 						confirmed_by: "gpt",
+						justification_flagger: flag.justification,
+						justification_confirmer: review.justification,
 					});
 				} else if (review?.verdict === "defended") {
 					retained.push({
-						target: flag.target,
-						defense: review.reason ?? "",
+						term: flag.term,
+						flagged_by: "claude",
+						defended_by: "gpt",
+						justification_flagger: flag.justification,
+						counter_argument_defender: review.justification,
+						final_decision: RETAINED,
 					});
 				} else {
-					// No review from GPT → retain (disagreement = retention)
 					retained.push({
-						target: flag.target,
-						defense: "no review from GPT",
+						term: flag.term,
+						flagged_by: "claude",
+						defended_by: "gpt",
+						justification_flagger: flag.justification,
+						counter_argument_defender: "No review from GPT",
+						final_decision: RETAINED,
 					});
 				}
 			}
 
 			for (const flag of r2.additional_flags) {
 				if (r3) {
-					const decision = r3.final_decisions.find((d) => d.target === flag.target);
+					const decision = r3.final_decisions.find((d) => d.term === flag.term);
 					if (decision?.decision === "removed") {
-						termsToRemove.add(flag.target.toLowerCase());
+						termsToRemove.add(flag.term.toLowerCase());
 						removed.push({
-							target: flag.target,
-							reason: flag.reason ?? "",
+							term: flag.term,
 							flagged_by: "gpt",
 							confirmed_by: "claude",
+							justification_flagger: flag.justification,
+							justification_confirmer: decision.reasoning,
 						});
 					} else {
 						retained.push({
-							target: flag.target,
-							defense: decision?.reasoning ?? "doubt = retention",
+							term: flag.term,
+							flagged_by: "gpt",
+							defended_by: "claude",
+							justification_flagger: flag.justification,
+							counter_argument_defender: decision?.reasoning ?? "Doubt = retention",
+							final_decision: RETAINED,
 						});
 					}
 				} else {
-					retained.push({ target: flag.target, defense: "no round 3" });
+					retained.push({
+						term: flag.term,
+						flagged_by: "gpt",
+						defended_by: "claude",
+						justification_flagger: flag.justification,
+						counter_argument_defender: "No Round 3",
+						final_decision: RETAINED,
+					});
 				}
 			}
 
