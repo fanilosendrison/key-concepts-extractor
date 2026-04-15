@@ -1,0 +1,14 @@
+[
+  {
+    "term": "variance",
+    "category": "property",
+    "explicit_in_source": true,
+    "justification": "central question of the research"
+  },
+  {
+    "term": "mecanismes_causaux-specific-concept",
+    "category": "property",
+    "explicit_in_source": false,
+    "justification": "gemini-unique"
+  }
+]
