@@ -1,3 +1,4 @@
+import { mostFrequent } from "./collection-utils.js";
 import type { EmbeddingAdapter } from "./ports.js";
 import type {
 	AngleId,
@@ -54,26 +55,6 @@ function meanVector(vectors: number[][]): number[] {
 	}
 	for (let i = 0; i < dim; i++) result[i] = (result[i] ?? 0) / vectors.length;
 	return result;
-}
-
-function mostFrequent<T>(values: T[]): T {
-	const counts = new Map<T, { count: number; firstIndex: number }>();
-	values.forEach((v, i) => {
-		const entry = counts.get(v);
-		if (entry) entry.count++;
-		else counts.set(v, { count: 1, firstIndex: i });
-	});
-	let best: T = values[0] as T;
-	let bestCount = -1;
-	let bestFirstIndex = Number.POSITIVE_INFINITY;
-	for (const [value, { count, firstIndex }] of counts) {
-		if (count > bestCount || (count === bestCount && firstIndex < bestFirstIndex)) {
-			best = value;
-			bestCount = count;
-			bestFirstIndex = firstIndex;
-		}
-	}
-	return best;
 }
 
 function deriveAnglesCount(n: number): AnglesCount {

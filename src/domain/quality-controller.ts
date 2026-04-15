@@ -1,3 +1,4 @@
+import { fillTemplate } from "./collection-utils.js";
 import {
 	QUALITY_R1_SYSTEM,
 	QUALITY_R1_USER,
@@ -55,14 +56,6 @@ interface R3Decision {
 
 interface R3Output {
 	final_decisions: R3Decision[];
-}
-
-function fillTemplate(template: string, vars: Record<string, string>): string {
-	let out = template;
-	for (const [key, value] of Object.entries(vars)) {
-		out = out.split(`{${key}}`).join(value);
-	}
-	return out;
 }
 
 function buildCorrection(
