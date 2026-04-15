@@ -79,9 +79,9 @@ All event types from Spec v1.5 §13. Helper functions for type-safe event constr
 
 ```typescript
 // Phase: extraction
-function extractionStart(angle: AngleId, model: ProviderShortId): Omit<PipelineEvent, 'timestamp'>;
-function extractionComplete(angle: AngleId, model: ProviderShortId, conceptsCount: number): ...;
-function extractionError(angle: AngleId, model: ProviderShortId, error: string, retry: number): ...;
+function extractionStart(angle: AngleId, model: ProviderId): Omit<PipelineEvent, 'timestamp'>;
+function extractionComplete(angle: AngleId, model: ProviderId, conceptsCount: number): ...;
+function extractionError(angle: AngleId, model: ProviderId, error: string, retry: number): ...;
 function extractionProgress(completed: number, total: number): ...;
 
 // Phase: fusion_intra

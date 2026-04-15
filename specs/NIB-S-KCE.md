@@ -81,18 +81,18 @@ interface InputFileMeta {
 interface LLMRequest {
   systemPrompt: string;
   userPrompt: string;
-  provider: ProviderId;       // 'anthropic' | 'openai' | 'google'
+  provider: ProviderLongId;       // 'anthropic' | 'openai' | 'google'
 }
 // Output
 interface LLMResponse {
   content: string;            // Raw JSON string from the LLM
-  provider: ProviderId;
+  provider: ProviderLongId;
   model: string;              // Actual model used
   latencyMs: number;
 }
 // Error
 interface LLMError {
-  provider: ProviderId;
+  provider: ProviderLongId;
   error: string;
   retriesExhausted: boolean;
 }
@@ -113,7 +113,7 @@ interface ExtractionOutput {
 }
 interface ExtractionPass {
   angle: AngleId;                     // See §3.14
-  provider: ProviderShortId;          // 'claude' | 'gpt' | 'gemini'
+  provider: ProviderId;          // 'claude' | 'gpt' | 'gemini'
   concepts: RawConcept[];
 }
 interface RawConcept {
@@ -142,11 +142,11 @@ interface FusionIntraOutput {
 interface IntraAngleConcept {
   term: string;
   consensus: '1/3' | '2/3' | '3/3';
-  found_by_models: ProviderShortId[];
+  found_by_models: ProviderId[];
   category: ConceptCategory;
   granularity: GranularityLevel;
   explicit_in_source: boolean;
-  justifications: Record<ProviderShortId, string>;
+  justifications: Record<ProviderId, string>;
 }
 ```
 
@@ -170,16 +170,16 @@ interface FinalConcept {
   explicit_in_source: boolean;
   angle_provenance: Record<AngleId, {
     consensus: '1/3' | '2/3' | '3/3';
-    models: ProviderShortId[];
+    models: ProviderId[];
   }>;
-  angles_count: string;               // e.g. '3/5'
+  angles_count: AnglesCount;          // '1/5' | '2/5' | '3/5' | '4/5' | '5/5'
   justifications: string[];
 }
 // Persisted format for merged.json (wraps FinalConcept[] with metadata)
 interface MergedOutput {
   metadata: {
-    models: ProviderShortId[];          // ['claude', 'gpt', 'gemini']
-    angles: AngleId[];                  // All 5 angle IDs
+    models: ProviderId[];          // ['claude', 'gpt', 'gemini']
+    angles: readonly AngleId[];         // All 5 angle IDs (frozen via CANONICAL_ANGLES)
     total_passes: number;               // 15
     fusion_similarity_threshold: number; // The embedding threshold used
     date: string;                       // ISO 8601 date (YYYY-MM-DD)
@@ -214,6 +214,9 @@ interface QualityCorrection {
   error_type: 'abusive_merge' | 'incorrect_categorization' | 'justification_incoherence';
   target: string;
   correction: string;
+  // Required non-null for abusive_merge (≥2 distinct terms, none === target).
+  // Validated fail-closed in QC before applyCorrections — see NIB-M-QUALITY-CONTROLLER §3, §4.4.
+  suggested_split: string[] | null;
   flagged_by: 'claude' | 'gpt';
   confirmed_by: 'claude' | 'gpt' | null;
   justification: string;
@@ -242,20 +245,20 @@ interface RelevanceReport {
   removed: RelevanceRemoval[];
   retained_after_dispute: RelevanceRetention[];
 }
+// Field naming follows NIB-M-LLM-PAYLOADS (`target`/`reason`) — the LLM
+// schema dictates the wire shape, propagated unchanged through the parser.
+// `confirmed_by` is nullable for the no-round-3 path (GPT-only flag retained).
 interface RelevanceRemoval {
-  term: string;
+  target: string;
+  reason: string;
   flagged_by: 'claude' | 'gpt';
-  confirmed_by: 'claude' | 'gpt';
-  justification_flagger: string;
-  justification_confirmer: string;
+  confirmed_by: 'claude' | 'gpt' | null;
 }
+// Minimal shape: only the audit signal (which term, how it was defended) is
+// kept. Per-round provenance can be recovered from events.jsonl if needed.
 interface RelevanceRetention {
-  term: string;
-  flagged_by: 'claude' | 'gpt';
-  defended_by: 'claude' | 'gpt';
-  justification_flagger: string;
-  counter_argument_defender: string;
-  final_decision: 'retained (désaccord = maintien)';
+  target: string;
+  defense: string;
 }
 ```
 
@@ -281,22 +284,18 @@ interface CoverageOutput {
 ### 3.9 DiagnosticsGenerator
 
 ```typescript
-// Input
+// Input — see NIB-M-DIAGNOSTICS §2 for the rationale of the simplified shape.
 interface DiagnosticsInput {
-  rawPasses: ExtractionPass[];        // 15 passes
-  intraAngleResults: FusionIntraOutput[];  // 5 post-control
-  finalConcepts: FinalConcept[];
-  coverageStats: CoverageOutput['stats'];
+  concepts: FinalConcept[];
+  fragile?: number;
 }
-// Output
+// Output — see NIB-M-DIAGNOSTICS §3.
 interface DiagnosticsReport {
-  total_raw: number;
-  total_after_intra_angle: number;
-  total_after_inter_angle: number;
-  unique_by_angle: Record<AngleId, number>;
-  unique_by_model: Record<ProviderShortId, number>;
-  fragile_concepts: number;
+  unique_by_angle: Partial<Record<AngleId, number>>;
+  unique_by_model: Partial<Record<ProviderId, string[]>>;
   unanimous_concepts: number;
+  total_after_inter_angle: number;
+  fragile: number;
 }
 ```
 
@@ -321,7 +320,7 @@ interface RunManifest {
   };
 }
 interface RunConfig {
-  models: Record<ProviderId, string>;
+  models: Record<ProviderLongId, string>;
   embedding_model: string;
   levenshtein_threshold: number;
   embedding_threshold: number;
@@ -370,14 +369,15 @@ interface PipelineEvent {
 
 ```typescript
 type AngleId = 'extraction_directe' | 'etats_ideaux' | 'mecanismes_causaux' | 'taxonomie' | 'conditions_bord';
-type ProviderId = 'anthropic' | 'openai' | 'google';
-type ProviderShortId = 'claude' | 'gpt' | 'gemini';
+type ProviderLongId = 'anthropic' | 'openai' | 'google';
+type ProviderId = 'claude' | 'gpt' | 'gemini';
 type ConceptCategory = 'phenomenon' | 'method' | 'metric' | 'property' | 'architecture' | 'tool' | 'constraint' | 'context';
 type GranularityLevel = 'token-level' | 'model-level' | 'system-level' | 'pipeline-level' | 'domain-level';
 type ControlScope = `angle:${AngleId}` | 'inter_angle';
+type AnglesCount = '1/5' | '2/5' | '3/5' | '4/5' | '5/5';
 
 const ANGLES: AngleId[] = ['extraction_directe', 'etats_ideaux', 'mecanismes_causaux', 'taxonomie', 'conditions_bord'];
-const PROVIDERS: { id: ProviderId; shortId: ProviderShortId }[] = [
+const PROVIDERS: { id: ProviderLongId; shortId: ProviderId }[] = [
   { id: 'anthropic', shortId: 'claude' },
   { id: 'openai', shortId: 'gpt' },
   { id: 'google', shortId: 'gemini' },

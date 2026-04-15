@@ -3,10 +3,15 @@ import type { LLMRequest, ProviderAdapter } from "./ports.js";
 import {
 	type AngleId,
 	CANONICAL_ANGLES,
+	CONCEPT_CATEGORIES,
+	GRANULARITY_LEVELS,
 	type ProviderId,
 	type ProviderLongId,
 	type RawConcept,
 } from "./types.js";
+
+const CONCEPT_CATEGORY_SET: ReadonlySet<string> = new Set(CONCEPT_CATEGORIES);
+const GRANULARITY_LEVEL_SET: ReadonlySet<string> = new Set(GRANULARITY_LEVELS);
 
 const PROVIDER_PAIRS: Array<{ long: ProviderLongId; short: ProviderId }> = [
 	{ long: "anthropic", short: "claude" },
@@ -115,6 +120,16 @@ function parseExtractionResponse(raw: string): RawConcept[] {
 		) {
 			throw new TransientLLMError(
 				"Concept missing required fields (term, category, granularity, justification)",
+			);
+		}
+		if (!CONCEPT_CATEGORY_SET.has(c.category)) {
+			throw new TransientLLMError(
+				`Concept category '${c.category}' not in NIB-S-KCE §3.14 closed set`,
+			);
+		}
+		if (!GRANULARITY_LEVEL_SET.has(c.granularity)) {
+			throw new TransientLLMError(
+				`Concept granularity '${c.granularity}' not in NIB-S-KCE §3.14 closed set`,
 			);
 		}
 	}

@@ -22,7 +22,7 @@ Abstracts the three LLM provider APIs (Anthropic, OpenAI, Google) behind a unifo
 interface LLMRequest {
   systemPrompt: string;
   userPrompt: string;
-  provider: ProviderId;         // 'anthropic' | 'openai' | 'google'
+  provider: ProviderLongId;         // 'anthropic' | 'openai' | 'google'
 }
 
 interface ProviderConfig {
@@ -41,7 +41,7 @@ Provenance: `LLMRequest` is built by ExtractionOrchestrator, QualityController, 
 ```typescript
 interface LLMResponse {
   content: string;              // Raw response body (expected: valid JSON string)
-  provider: ProviderId;
+  provider: ProviderLongId;
   model: string;                // Actual model identifier used
   latencyMs: number;            // Wall-clock time of the successful call
 }
@@ -57,6 +57,7 @@ Consumed by: ExtractionOrchestrator (parses as RawConcept[]), QualityController/
 
 ```typescript
 interface ProviderAdapter {
+  readonly provider: ProviderLongId;        // 'anthropic' | 'openai' | 'google'
   call(request: LLMRequest): Promise<LLMResponse>;
 }
 ```
@@ -254,7 +255,7 @@ Call 4: 500 → throw FatalLLMError({ provider: 'google', error: '500 Internal S
 
 ```typescript
 // At startup:
-const adapters: Record<ProviderId, ProviderAdapter> = {
+const adapters: Record<ProviderLongId, ProviderAdapter> = {
   anthropic: new AnthropicAdapter(config.anthropic, emitter),
   openai: new OpenAIAdapter(config.openai, emitter),
   google: new GoogleAdapter(config.google, emitter),

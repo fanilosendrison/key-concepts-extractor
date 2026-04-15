@@ -23,7 +23,7 @@ interface ExtractionInput {
   context: string;                              // From InputProcessor
 }
 // Also receives (injected):
-//   adapters: Record<ProviderId, ProviderAdapter>
+//   adapters: Record<ProviderLongId, ProviderAdapter>
 //   emitter: EventEmitter
 //   runManager: RunManager
 ```
@@ -38,7 +38,7 @@ interface ExtractionOutput {
 }
 interface ExtractionPass {
   angle: AngleId;
-  provider: ProviderShortId;
+  provider: ProviderId;
   concepts: RawConcept[];
 }
 ```
@@ -74,7 +74,7 @@ The user prompt is the exact Type 1 user prompt from LLM Payloads v0.2. It has o
 ### 4.4 buildRequest(context, angle, provider)
 
 ```javascript
-function buildRequest(context: string, angle: AngleId, provider: ProviderId): LLMRequest {
+function buildRequest(context: string, angle: AngleId, provider: ProviderLongId): LLMRequest {
   const systemPrompt = TYPE1_SYSTEM_PROMPT.replace('{angle_prompt}', ANGLE_PROMPTS[angle]);
   const userPrompt = TYPE1_USER_PROMPT.replace('{context}', context);
   return { systemPrompt, userPrompt, provider };

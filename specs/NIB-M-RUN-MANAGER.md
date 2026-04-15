@@ -43,7 +43,7 @@ class RunManager {
 
   // Persistence
   persistInputs(prompt: string | null, files: InputFileMeta[], fileContents: InputFile[]): void;
-  persistExtractionPass(angle: AngleId, provider: ProviderShortId, concepts: RawConcept[]): void;
+  persistExtractionPass(angle: AngleId, provider: ProviderId, concepts: RawConcept[]): void;
   persistIntraAngle(angle: AngleId, result: FusionIntraOutput, qualityReport: QualityReport): void;
   persistIntraAngleRelevance(angle: AngleId, relevanceReport: RelevanceReport): void;
   persistInterAngle(result: FusionInterOutput, qualityReport: QualityReport, relevanceReport: RelevanceReport): void;
