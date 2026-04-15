@@ -284,22 +284,18 @@ interface CoverageOutput {
 ### 3.9 DiagnosticsGenerator
 
 ```typescript
-// Input
+// Input — see NIB-M-DIAGNOSTICS §2 for the rationale of the simplified shape.
 interface DiagnosticsInput {
-  rawPasses: ExtractionPass[];        // 15 passes
-  intraAngleResults: FusionIntraOutput[];  // 5 post-control
-  finalConcepts: FinalConcept[];
-  coverageStats: CoverageOutput['stats'];
+  concepts: FinalConcept[];
+  fragile?: number;
 }
-// Output
+// Output — see NIB-M-DIAGNOSTICS §3.
 interface DiagnosticsReport {
-  total_raw: number;
-  total_after_intra_angle: number;
-  total_after_inter_angle: number;
-  unique_by_angle: Record<AngleId, number>;
-  unique_by_model: Record<ProviderId, number>;
-  fragile_concepts: number;
+  unique_by_angle: Partial<Record<AngleId, number>>;
+  unique_by_model: Partial<Record<ProviderId, string[]>>;
   unanimous_concepts: number;
+  total_after_inter_angle: number;
+  fragile: number;
 }
 ```
 

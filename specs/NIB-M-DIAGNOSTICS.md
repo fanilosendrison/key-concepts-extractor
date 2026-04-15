@@ -19,11 +19,13 @@ Computes the diagnostic report summarizing extraction effectiveness: contributio
 ## 2. Inputs
 
 ```typescript
+// Refactored shape: diagnostics is computed from the final concept list
+// alone; raw/intra totals are tracked elsewhere if needed. `fragile` is
+// passed in (already counted by the coverage verifier) rather than
+// recomputed here.
 interface DiagnosticsInput {
-  rawPasses: ExtractionPass[];              // 15 passes
-  intraAngleResults: FusionIntraOutput[];   // 5 post-control
-  finalConcepts: FinalConcept[];            // Post inter-angle + coverage
-  coverageStats: { explicit: number; implicit: number; fragile: number };
+  concepts: FinalConcept[];
+  fragile?: number;
 }
 ```
 
@@ -32,14 +34,16 @@ interface DiagnosticsInput {
 ## 3. Outputs
 
 ```typescript
+// `unique_by_model` carries the actual terms (not just counts) so the
+// history view can show which concepts each model uniquely contributed.
+// total_raw / total_after_intra_angle are tracked by upstream phases and
+// not re-emitted here. `fragile` mirrors the coverage verifier's count.
 interface DiagnosticsReport {
-  total_raw: number;                        // Sum of concepts across 15 passes
-  total_after_intra_angle: number;          // Sum across 5 intra-angle lists
-  total_after_inter_angle: number;          // Final concept count
-  unique_by_angle: Record<AngleId, number>; // Concepts found ONLY by this angle
-  unique_by_model: Record<ProviderId, number>; // Concepts found ONLY by this model
-  fragile_concepts: number;
-  unanimous_concepts: number;               // 3+ angles AND consensus 3/3 on ≥1 angle
+  unique_by_angle: Partial<Record<AngleId, number>>;        // Concepts found ONLY by this angle
+  unique_by_model: Partial<Record<ProviderId, string[]>>;   // Terms found ONLY by this model
+  unanimous_concepts: number;                                // 3+ angles AND consensus 3/3 on ≥1 angle
+  total_after_inter_angle: number;                           // Final concept count
+  fragile: number;
 }
 ```
 
