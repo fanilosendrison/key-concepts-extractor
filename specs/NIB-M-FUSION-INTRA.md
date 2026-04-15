@@ -40,11 +40,11 @@ interface FusionIntraOutput {
 interface IntraAngleConcept {
   term: string;                       // Representative term of the group
   consensus: '1/3' | '2/3' | '3/3';
-  found_by_models: ProviderShortId[];
+  found_by_models: ProviderId[];
   category: ConceptCategory;          // Most frequent, or first if tie
   granularity: GranularityLevel;      // Most frequent, or first if tie
   explicit_in_source: boolean;        // true if ANY provider marked it true
-  justifications: Record<ProviderShortId, string>;
+  justifications: Record<ProviderId, string>;
 }
 ```
 
@@ -76,7 +76,7 @@ This is the core deduplication algorithm.
 
 ```javascript
 function groupConcepts(
-  allConcepts: { concept: RawConcept; provider: ProviderShortId }[],
+  allConcepts: { concept: RawConcept; provider: ProviderId }[],
   threshold: number
 ): ConceptGroup[] {
   const groups: ConceptGroup[] = [];
@@ -115,7 +115,7 @@ function groupConcepts(
 interface ConceptGroup {
   normalizedTerm: string;
   representativeTerm: string;
-  members: { concept: RawConcept; provider: ProviderShortId }[];
+  members: { concept: RawConcept; provider: ProviderId }[];
 }
 ```
 
@@ -134,7 +134,7 @@ function resolveGroup(group: ConceptGroup): IntraAngleConcept {
   const explicit = group.members.some(m => m.concept.explicit_in_source);
   // Justifications: one per provider. If multiple members from same provider (shouldn't happen
   // with 3 providers, but defensive), keep the first.
-  const justifications: Record<ProviderShortId, string> = {};
+  const justifications: Record<ProviderId, string> = {};
   for (const member of group.members) {
     if (!justifications[member.provider]) {
       justifications[member.provider] = member.concept.justification;

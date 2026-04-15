@@ -43,7 +43,7 @@ interface FinalConcept {
   explicit_in_source: boolean;        // true if ANY member is explicit
   angle_provenance: Record<AngleId, {
     consensus: '1/3' | '2/3' | '3/3';
-    models: ProviderShortId[];
+    models: ProviderId[];
   }>;
   angles_count: string;               // e.g. '3/5'
   justifications: string[];           // All unique justifications

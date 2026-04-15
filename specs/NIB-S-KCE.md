@@ -81,18 +81,18 @@ interface InputFileMeta {
 interface LLMRequest {
   systemPrompt: string;
   userPrompt: string;
-  provider: ProviderId;       // 'anthropic' | 'openai' | 'google'
+  provider: ProviderLongId;       // 'anthropic' | 'openai' | 'google'
 }
 // Output
 interface LLMResponse {
   content: string;            // Raw JSON string from the LLM
-  provider: ProviderId;
+  provider: ProviderLongId;
   model: string;              // Actual model used
   latencyMs: number;
 }
 // Error
 interface LLMError {
-  provider: ProviderId;
+  provider: ProviderLongId;
   error: string;
   retriesExhausted: boolean;
 }
@@ -113,7 +113,7 @@ interface ExtractionOutput {
 }
 interface ExtractionPass {
   angle: AngleId;                     // See §3.14
-  provider: ProviderShortId;          // 'claude' | 'gpt' | 'gemini'
+  provider: ProviderId;          // 'claude' | 'gpt' | 'gemini'
   concepts: RawConcept[];
 }
 interface RawConcept {
@@ -142,11 +142,11 @@ interface FusionIntraOutput {
 interface IntraAngleConcept {
   term: string;
   consensus: '1/3' | '2/3' | '3/3';
-  found_by_models: ProviderShortId[];
+  found_by_models: ProviderId[];
   category: ConceptCategory;
   granularity: GranularityLevel;
   explicit_in_source: boolean;
-  justifications: Record<ProviderShortId, string>;
+  justifications: Record<ProviderId, string>;
 }
 ```
 
@@ -170,7 +170,7 @@ interface FinalConcept {
   explicit_in_source: boolean;
   angle_provenance: Record<AngleId, {
     consensus: '1/3' | '2/3' | '3/3';
-    models: ProviderShortId[];
+    models: ProviderId[];
   }>;
   angles_count: string;               // e.g. '3/5'
   justifications: string[];
@@ -178,7 +178,7 @@ interface FinalConcept {
 // Persisted format for merged.json (wraps FinalConcept[] with metadata)
 interface MergedOutput {
   metadata: {
-    models: ProviderShortId[];          // ['claude', 'gpt', 'gemini']
+    models: ProviderId[];          // ['claude', 'gpt', 'gemini']
     angles: AngleId[];                  // All 5 angle IDs
     total_passes: number;               // 15
     fusion_similarity_threshold: number; // The embedding threshold used
@@ -294,7 +294,7 @@ interface DiagnosticsReport {
   total_after_intra_angle: number;
   total_after_inter_angle: number;
   unique_by_angle: Record<AngleId, number>;
-  unique_by_model: Record<ProviderShortId, number>;
+  unique_by_model: Record<ProviderId, number>;
   fragile_concepts: number;
   unanimous_concepts: number;
 }
@@ -321,7 +321,7 @@ interface RunManifest {
   };
 }
 interface RunConfig {
-  models: Record<ProviderId, string>;
+  models: Record<ProviderLongId, string>;
   embedding_model: string;
   levenshtein_threshold: number;
   embedding_threshold: number;
@@ -370,14 +370,14 @@ interface PipelineEvent {
 
 ```typescript
 type AngleId = 'extraction_directe' | 'etats_ideaux' | 'mecanismes_causaux' | 'taxonomie' | 'conditions_bord';
-type ProviderId = 'anthropic' | 'openai' | 'google';
-type ProviderShortId = 'claude' | 'gpt' | 'gemini';
+type ProviderLongId = 'anthropic' | 'openai' | 'google';
+type ProviderId = 'claude' | 'gpt' | 'gemini';
 type ConceptCategory = 'phenomenon' | 'method' | 'metric' | 'property' | 'architecture' | 'tool' | 'constraint' | 'context';
 type GranularityLevel = 'token-level' | 'model-level' | 'system-level' | 'pipeline-level' | 'domain-level';
 type ControlScope = `angle:${AngleId}` | 'inter_angle';
 
 const ANGLES: AngleId[] = ['extraction_directe', 'etats_ideaux', 'mecanismes_causaux', 'taxonomie', 'conditions_bord'];
-const PROVIDERS: { id: ProviderId; shortId: ProviderShortId }[] = [
+const PROVIDERS: { id: ProviderLongId; shortId: ProviderId }[] = [
   { id: 'anthropic', shortId: 'claude' },
   { id: 'openai', shortId: 'gpt' },
   { id: 'google', shortId: 'gemini' },

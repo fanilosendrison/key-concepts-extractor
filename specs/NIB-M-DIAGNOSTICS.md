@@ -37,7 +37,7 @@ interface DiagnosticsReport {
   total_after_intra_angle: number;          // Sum across 5 intra-angle lists
   total_after_inter_angle: number;          // Final concept count
   unique_by_angle: Record<AngleId, number>; // Concepts found ONLY by this angle
-  unique_by_model: Record<ProviderShortId, number>; // Concepts found ONLY by this model
+  unique_by_model: Record<ProviderId, number>; // Concepts found ONLY by this model
   fragile_concepts: number;
   unanimous_concepts: number;               // 3+ angles AND consensus 3/3 on ≥1 angle
 }
@@ -68,11 +68,11 @@ function computeUniqueByAngle(concepts: FinalConcept[]): Record<AngleId, number>
 ### 4.2 computeUniqueByModel(finalConcepts)
 
 ```javascript
-function computeUniqueByModel(concepts: FinalConcept[]): Record<ProviderShortId, number> {
-  const result: Record<ProviderShortId, number> = { claude: 0, gpt: 0, gemini: 0 };
+function computeUniqueByModel(concepts: FinalConcept[]): Record<ProviderId, number> {
+  const result: Record<ProviderId, number> = { claude: 0, gpt: 0, gemini: 0 };
   for (const concept of concepts) {
     // Collect all models that found this concept across all angles
-    const allModels = new Set<ProviderShortId>();
+    const allModels = new Set<ProviderId>();
     for (const prov of Object.values(concept.angle_provenance)) {
       for (const model of prov.models) {
         allModels.add(model);
