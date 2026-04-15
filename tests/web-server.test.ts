@@ -86,10 +86,10 @@ describe("WebServer", () => {
 		const runsDir = join(baseDir, "runs");
 		const rm1 = createRunManager(runsDir);
 		await rm1.initRun(DEFAULT_RUN_CONFIG);
-		await rm1.finalizeRun({});
+		await rm1.finalizeRun({ total_concepts: 0, fragile_concepts: 0, unanimous_concepts: 0 });
 		const rm2 = createRunManager(runsDir);
 		await rm2.initRun(DEFAULT_RUN_CONFIG);
-		await rm2.finalizeRun({});
+		await rm2.finalizeRun({ total_concepts: 0, fragile_concepts: 0, unanimous_concepts: 0 });
 
 		server = createWebServer(makeDeps(baseDir));
 		const res = await server.fetch(new Request("http://localhost/api/runs"));

@@ -13,6 +13,7 @@ import type {
 	RelevanceReport,
 	RunConfig,
 	RunManifest,
+	RunResults,
 	RunSource,
 } from "../domain/types.js";
 import { logger } from "./logger.js";
@@ -36,7 +37,7 @@ export interface RunManager {
 	persistDiagnostics(report: DiagnosticsReport): Promise<void>;
 	persistPromptFile(prompt: string): Promise<void>;
 	persistInputFile(normalizedName: string, content: string): Promise<void>;
-	finalizeRun(results: Record<string, unknown>): Promise<void>;
+	finalizeRun(results: RunResults): Promise<void>;
 	failRun(error: Error): Promise<void>;
 	stopRun(): Promise<void>;
 	getManifest(): Promise<RunManifest>;
@@ -70,8 +71,22 @@ async function readJson<T>(path: string): Promise<T> {
 // Backfill defaults for fields added after a manifest was first persisted.
 // Old run dirs (pre-source/input_files) should still load cleanly so the
 // history view doesn't crash on `undefined.length` or similar accesses.
-function backfillManifest(raw: Partial<RunManifest>): RunManifest {
-	return { source: "cli", input_files: [], ...raw } as RunManifest;
+function backfillManifest(raw: Partial<RunManifest> & { results?: unknown }): RunManifest {
+	const filled = { source: "cli", input_files: [], ...raw } as RunManifest;
+	// Drop legacy `results` payloads that don't match the strict RunResults
+	// shape; the type contract would otherwise lie at runtime.
+	if (filled.results !== undefined) {
+		const r = filled.results as Partial<RunManifest["results"]>;
+		if (
+			!r ||
+			typeof r.total_concepts !== "number" ||
+			typeof r.fragile_concepts !== "number" ||
+			typeof r.unanimous_concepts !== "number"
+		) {
+			delete filled.results;
+		}
+	}
+	return filled;
 }
 
 export function createRunManager(baseDir: string, runId?: string): RunManager {

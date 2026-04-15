@@ -142,6 +142,13 @@ export const DEFAULT_RUN_CONFIG: RunConfig = {
 	embedding_threshold: 0.85,
 };
 
+// Set on terminal status by finalizeRun. Shape mirrors NIB-S-KCE §3.10.
+export interface RunResults {
+	total_concepts: number;
+	fragile_concepts: number;
+	unanimous_concepts: number;
+}
+
 export interface RunManifest {
 	run_id: string;
 	status: RunStatus;
@@ -150,7 +157,7 @@ export interface RunManifest {
 	source: "cli" | "web";
 	input_files: string[];
 	config: RunConfig;
-	results?: Record<string, unknown>;
+	results?: RunResults;
 	error?: string;
 }
 
