@@ -84,13 +84,14 @@ function initRun(input, config, source): void {
   mkdirSync(join(this.runDir, 'fusion-inter'));
 
   // Write initial manifest
+  // finished_at and results are set on terminal status (see §4.10/§4.11).
+  // Prompt content is persisted as inputs/prompt.txt by persistInputs, not
+  // stored in the manifest itself.
   const manifest: RunManifest = {
     run_id: this.runId,
     status: 'running',
     created_at: new Date().toISOString(),
-    finished_at: null,
     source,
-    prompt: input.prompt ?? null,
     input_files: [],  // Filled by persistInputs
     config: {
       models: { anthropic: config.anthropic.model, openai: config.openai.model, google: config.google.model },
@@ -98,7 +99,6 @@ function initRun(input, config, source): void {
       levenshtein_threshold: config.levenshteinThreshold,
       embedding_threshold: config.embeddingThreshold,
     },
-    results: null,
   };
   writeJsonSync(join(this.runDir, 'manifest.json'), manifest);
 }
