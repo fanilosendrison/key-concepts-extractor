@@ -13,7 +13,9 @@ export function rawConcept(overrides: Partial<RawConcept> = {}): RawConcept {
 	return {
 		term: "concept",
 		category: "property",
+		granularity: "system-level",
 		explicit_in_source: true,
+		justification: "default test justification",
 		...overrides,
 	};
 }
@@ -23,6 +25,7 @@ export function mergedConcept(overrides: Partial<MergedConcept> = {}): MergedCon
 	return {
 		term,
 		category: "property",
+		granularity: "system-level",
 		explicit_in_source: true,
 		found_by_models: ["claude"] as ProviderId[],
 		consensus: "1/3" as Consensus,

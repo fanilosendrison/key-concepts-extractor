@@ -96,14 +96,16 @@ export function fuseIntraAngle(input: IntraAngleInput): MergedConcept[] {
 			if (!providers.includes(m.provider)) providers.push(m.provider);
 		}
 		const category = mostFrequent(group.members.map((m) => m.concept.category));
+		const granularity = mostFrequent(group.members.map((m) => m.concept.granularity));
 		const explicit = group.members.some((m) => m.concept.explicit_in_source);
 		const justifications = group.members
 			.map((m) => m.concept.justification)
-			.filter((j): j is string => typeof j === "string" && j.length > 0);
+			.filter((j) => j.length > 0);
 
 		return {
 			term: group.representativeTerm,
 			category,
+			granularity,
 			explicit_in_source: explicit,
 			found_by_models: providers,
 			consensus: consensusFor(providers.length),

@@ -107,8 +107,15 @@ function parseExtractionResponse(raw: string): RawConcept[] {
 			throw new TransientLLMError("Invalid concept entry");
 		}
 		const c = item as Record<string, unknown>;
-		if (typeof c.term !== "string" || typeof c.category !== "string") {
-			throw new TransientLLMError("Concept missing required fields (term, category)");
+		if (
+			typeof c.term !== "string" ||
+			typeof c.category !== "string" ||
+			typeof c.granularity !== "string" ||
+			typeof c.justification !== "string"
+		) {
+			throw new TransientLLMError(
+				"Concept missing required fields (term, category, granularity, justification)",
+			);
 		}
 	}
 	return list as RawConcept[];

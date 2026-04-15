@@ -2,12 +2,14 @@
 	{
 		"term": "variance",
 		"category": "property",
+		"granularity": "system-level",
 		"explicit_in_source": true,
 		"justification": "central question of the research"
 	},
 	{
 		"term": "conditions_bord-specific-concept",
 		"category": "property",
+		"granularity": "system-level",
 		"explicit_in_source": false,
 		"justification": "gemini-unique"
 	}

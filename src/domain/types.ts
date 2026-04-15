@@ -25,16 +25,21 @@ export type AnglesCount = "1/5" | "2/5" | "3/5" | "4/5" | "5/5";
 export type ConceptCategory = string;
 export type GranularityLevel = string;
 
+// All fields required: shape is contractual with the LLM extraction prompt
+// (see extraction-orchestrator.ts OUTPUT SCHEMA) and propagated as-is through
+// fusion-intra → fusion-inter without optional handling downstream.
 export interface RawConcept {
 	term: string;
 	category: ConceptCategory;
+	granularity: GranularityLevel;
 	explicit_in_source: boolean;
-	justification?: string;
+	justification: string;
 }
 
 export interface MergedConcept {
 	term: string;
 	category: ConceptCategory;
+	granularity: GranularityLevel;
 	explicit_in_source: boolean;
 	found_by_models: ProviderId[];
 	consensus: Consensus;
