@@ -334,7 +334,7 @@ interface RunConfig {
 ```typescript
 interface PipelineEvent {
   timestamp: string;                  // ISO 8601 with ms
-  phase: 'extraction' | 'fusion_intra' | 'fusion_inter' | 'finalization';
+  phase: 'input' | 'extraction' | 'fusion_intra' | 'fusion_inter' | 'diagnostics' | 'run';
   type: string;                       // See Spec v1.5 §13 for all event types
   payload: Record<string, unknown>;
 }
