@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/run-manager
 status: approved
+validates: [src/infra/run-manager.ts, tests/run-manager.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

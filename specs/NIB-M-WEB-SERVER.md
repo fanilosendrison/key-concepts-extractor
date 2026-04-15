@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/web-server
 status: approved
+validates: [src/web/server.ts, tests/web-server.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

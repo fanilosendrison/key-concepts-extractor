@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/diagnostics-generator
 status: approved
+validates: [src/domain/diagnostics.ts, tests/diagnostics.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

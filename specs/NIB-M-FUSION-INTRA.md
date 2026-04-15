@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/fusion-intra-angle
 status: approved
+validates: [src/domain/fusion-intra.ts, tests/fusion-intra.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

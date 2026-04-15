@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/provider-adapters
 status: approved
+validates: [src/infra/anthropic-adapter.ts, src/infra/openai-adapter.ts, src/infra/google-adapter.ts, src/infra/provider-shared.ts, src/domain/ports.ts, tests/contracts.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

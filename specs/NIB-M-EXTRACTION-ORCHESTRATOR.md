@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/extraction-orchestrator
 status: approved
+validates: [src/domain/extraction-orchestrator.ts, tests/extraction-orchestrator.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

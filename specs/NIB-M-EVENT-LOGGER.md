@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/event-logger
 status: approved
+validates: [src/infra/event-logger.ts, tests/event-logger.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

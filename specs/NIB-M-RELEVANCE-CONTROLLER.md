@@ -4,6 +4,7 @@ type: nib-module
 version: "1.0.0"
 scope: key-concepts-extractor/relevance-controller
 status: approved
+validates: [src/domain/relevance-controller.ts, tests/relevance-controller.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---

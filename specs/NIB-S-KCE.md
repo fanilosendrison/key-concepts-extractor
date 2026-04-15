@@ -4,6 +4,7 @@ type: nib-system
 version: "1.0.0"
 scope: key-concepts-extractor
 status: approved
+validates: [src/pipeline.ts, src/index.ts, tests/pipeline-integration.test.ts]
 consumers: [claude-code]
 superseded_by: []
 ---
