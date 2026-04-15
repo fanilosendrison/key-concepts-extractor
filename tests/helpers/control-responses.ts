@@ -7,71 +7,84 @@
 // ---------- Quality ----------
 
 export interface QualityR1Error {
-  target: string;
-  error_type: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
-  justification: string;
+	target: string;
+	error_type: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
+	justification: string;
+	// NIB-M-LLM-PAYLOADS Type 2 v0.3.0: required non-null for abusive_merge (≥2 distinct terms, none === target).
+	suggested_split?: string[] | null;
 }
 
 export function qualityR1(errors: QualityR1Error[], noErrorCount = 0): string {
-  return JSON.stringify({ errors_found: errors, no_error_count: noErrorCount });
+	const normalized = errors.map((e) => ({
+		...e,
+		suggested_split: e.suggested_split ?? null,
+	}));
+	return JSON.stringify({ errors_found: normalized, no_error_count: noErrorCount });
 }
 
 export interface QualityR2Review {
-  target: string;
-  verdict: "confirmed" | "contested";
-  justification: string;
+	target: string;
+	verdict: "confirmed" | "contested";
+	justification: string;
 }
 
-export function qualityR2(
-  reviews: QualityR2Review[],
-  additional: QualityR1Error[] = [],
-): string {
-  return JSON.stringify({
-    reviews_of_claude: reviews,
-    additional_errors: additional,
-  });
+export function qualityR2(reviews: QualityR2Review[], additional: QualityR1Error[] = []): string {
+	const normalized = additional.map((e) => ({
+		...e,
+		suggested_split: e.suggested_split ?? null,
+	}));
+	return JSON.stringify({
+		reviews_of_claude: reviews,
+		additional_errors: normalized,
+	});
 }
 
 export interface QualityR3Decision {
-  target: string;
-  decision: "corrected" | "maintained";
-  reasoning: string;
+	target: string;
+	decision: "corrected" | "maintained";
+	reasoning: string;
+	// NIB-M-LLM-PAYLOADS Type 4 v0.3.0: required non-null when decision=corrected AND underlying error=abusive_merge.
+	suggested_split?: string[] | null;
 }
 
 export function qualityR3(decisions: QualityR3Decision[]): string {
-  return JSON.stringify({ final_decisions: decisions });
+	const normalized = decisions.map((d) => ({
+		...d,
+		suggested_split: d.suggested_split ?? null,
+	}));
+	return JSON.stringify({ final_decisions: normalized });
 }
 
 // ---------- Relevance ----------
 
 export interface RelevanceR1Flag {
-  target: string;
-  reason: string;
+	target: string;
+	reason: string;
 }
 
 export function relevanceR1(flags: RelevanceR1Flag[], notFlaggedCount = 0): string {
-  return JSON.stringify({ flagged_off_topic: flags, not_flagged_count: notFlaggedCount });
+	return JSON.stringify({ flagged_off_topic: flags, not_flagged_count: notFlaggedCount });
 }
 
 export interface RelevanceR2Review {
-  target: string;
-  verdict: "confirmed_off_topic" | "defended";
-  reason: string;
+	target: string;
+	verdict: "confirmed_off_topic" | "defended";
+	reason: string;
 }
 
 export function relevanceR2(
-  reviews: RelevanceR2Review[],
-  additional: RelevanceR1Flag[] = [],
+	reviews: RelevanceR2Review[],
+	additional: RelevanceR1Flag[] = [],
 ): string {
-  return JSON.stringify({ reviews_of_claude: reviews, additional_flags: additional });
+	return JSON.stringify({ reviews_of_claude: reviews, additional_flags: additional });
 }
 
 export interface RelevanceR3Decision {
-  target: string;
-  decision: "removed" | "retained";
-  reasoning: string;
+	target: string;
+	decision: "removed" | "retained";
+	reasoning: string;
 }
 
 export function relevanceR3(decisions: RelevanceR3Decision[]): string {
-  return JSON.stringify({ final_decisions: decisions });
+	return JSON.stringify({ final_decisions: decisions });
 }

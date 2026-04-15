@@ -2,7 +2,14 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AngleId, ProviderId, RawConcept, RunManifest } from "../domain/types.js";
+import type {
+	AngleId,
+	DiagnosticsReport,
+	MergedOutput,
+	ProviderId,
+	RawConcept,
+	RunManifest,
+} from "../domain/types.js";
 
 export interface RunManager {
 	readonly runId: string;
@@ -16,10 +23,10 @@ export interface RunManager {
 	persistIntraAngle(angle: AngleId, payload: unknown): Promise<void>;
 	persistIntraAngleQuality(angle: AngleId, report: unknown): Promise<void>;
 	persistIntraAngleRelevance(angle: AngleId, report: unknown): Promise<void>;
-	persistInterAngle(merged: unknown): Promise<void>;
+	persistInterAngle(merged: MergedOutput): Promise<void>;
 	persistInterAngleQuality(report: unknown): Promise<void>;
 	persistInterAngleRelevance(report: unknown): Promise<void>;
-	persistDiagnostics(report: unknown): Promise<void>;
+	persistDiagnostics(report: DiagnosticsReport): Promise<void>;
 	persistPromptFile(prompt: string): Promise<void>;
 	persistInputFile(normalizedName: string, content: string): Promise<void>;
 	finalizeRun(results: Record<string, unknown>): Promise<void>;
@@ -58,11 +65,17 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		await writeJson(manifestPath, { ...current, ...patch });
 	};
 
+	const isTerminal = (status: RunManifest["status"]): boolean =>
+		status === "completed" || status === "failed" || status === "stopped";
+
 	return {
 		runId: id,
 		runDir,
 
+		// Idempotent: safe to call twice on the same runDir. Returns early if a
+		// manifest already exists so callers don't have to guard ordering.
 		async initRun() {
+			if (existsSync(manifestPath)) return;
 			await mkdir(runDir, { recursive: true });
 			for (const sub of SUBDIRS) {
 				await mkdir(join(runDir, sub), { recursive: true });
@@ -92,6 +105,8 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		},
 
 		async persistInterAngle(merged) {
+			// NIB-S-KCE §3.5 + NIB-M-RUN-MANAGER §4.5c: persist MergedOutput wrapper with
+			// metadata; diagnostics is filled in a second pass by persistDiagnostics.
 			await writeJson(join(runDir, "fusion-inter", "merged.json"), merged);
 		},
 
@@ -104,7 +119,15 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		},
 
 		async persistDiagnostics(report) {
+			// NIB-M-RUN-MANAGER §4.5d: write diagnostics.json, then re-read merged.json and
+			// fill the `diagnostics` field of the MergedOutput wrapper.
 			await writeJson(join(runDir, "diagnostics.json"), report);
+			const mergedPath = join(runDir, "fusion-inter", "merged.json");
+			if (existsSync(mergedPath)) {
+				const merged = await readJson<MergedOutput>(mergedPath);
+				merged.diagnostics = report;
+				await writeJson(mergedPath, merged);
+			}
 		},
 
 		async persistPromptFile(prompt) {
@@ -115,7 +138,12 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 			await writeFile(join(runDir, "inputs", normalizedName), content, "utf-8");
 		},
 
+		// finalize/fail/stop are idempotent: once a run reaches a terminal status,
+		// later calls are no-ops so we never overwrite a `stopped` with a `completed`
+		// (e.g. pipeline still writing after DELETE) or double-fail on error paths.
 		async finalizeRun(results) {
+			const current = await readJson<RunManifest>(manifestPath);
+			if (isTerminal(current.status)) return;
 			await updateManifest({
 				status: "completed",
 				finished_at: new Date().toISOString(),
@@ -124,6 +152,8 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		},
 
 		async failRun(error) {
+			const current = await readJson<RunManifest>(manifestPath);
+			if (isTerminal(current.status)) return;
 			await updateManifest({
 				status: "failed",
 				finished_at: new Date().toISOString(),
@@ -132,6 +162,8 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 		},
 
 		async stopRun() {
+			const current = await readJson<RunManifest>(manifestPath);
+			if (isTerminal(current.status)) return;
 			await updateManifest({
 				status: "stopped",
 				finished_at: new Date().toISOString(),

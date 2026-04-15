@@ -1,7 +1,7 @@
 ---
 id: NIB-M-LLM-PAYLOADS
 type: nib-module
-version: "0.2.0"
+version: "0.3.0"
 scope: key-concepts-extractor/llm-payloads
 status: approved
 consumers: [claude-code]
@@ -118,6 +118,8 @@ DECISION RULE: when in doubt, flag the error. A false flag is better than an und
 
 DO NOT judge the relevance of concepts. A concept can be correctly merged and categorized while being off-topic — that is not your concern here.
 
+ABSOLUTE RULE FOR abusive_merge: when you flag an abusive_merge, you MUST populate `suggested_split` with the list of distinct terms that should be extracted from the cluster. The array MUST contain at least 2 distinct strings, and no string may equal the `target`. For any other error type, set `suggested_split` to null.
+
 Respond ONLY with valid JSON, no preamble, no markdown.
 
 OUTPUT SCHEMA:
@@ -128,6 +130,7 @@ OUTPUT SCHEMA:
       "target": "string — the term or cluster concerned",
       "description": "string — description of the error",
       "proposed_correction": "string — the proposed correction",
+      "suggested_split": "string[] | null — for abusive_merge: ≥2 distinct terms to extract; null otherwise",
       "confidence": "string — one of: certain | probable | doubtful"
     }
   ],
@@ -166,6 +169,8 @@ A first controller (Claude) analyzed a merged list and flagged potential errors.
 
 RULE: you do NOT judge the relevance of concepts, only the quality of the fusion.
 
+ABSOLUTE RULE FOR abusive_merge in `additional_errors`: when you flag an abusive_merge, you MUST populate `suggested_split` with ≥2 distinct terms to extract from the cluster, none equal to `target`. For any other error type, set `suggested_split` to null.
+
 Respond ONLY with valid JSON, no preamble, no markdown.
 
 OUTPUT SCHEMA:
@@ -184,6 +189,7 @@ OUTPUT SCHEMA:
       "target": "string — the term or cluster concerned",
       "description": "string — description of the error",
       "proposed_correction": "string — the proposed correction",
+      "suggested_split": "string[] | null — for abusive_merge: ≥2 distinct terms to extract; null otherwise",
       "confidence": "string — one of: certain | probable | doubtful"
     }
   ]
@@ -220,6 +226,8 @@ ABSOLUTE DECISION RULE: when in doubt, correct. It is better to separate two con
 
 For additional errors flagged by GPT: apply the same rule.
 
+ABSOLUTE RULE FOR abusive_merge final decisions: when `decision === "corrected"` AND the underlying error was `abusive_merge`, you MUST populate `suggested_split` with ≥2 distinct terms to extract from the cluster, none equal to `target`. In all other cases (decision `maintained`, or underlying error not `abusive_merge`), set `suggested_split` to null.
+
 Respond ONLY with valid JSON, no preamble, no markdown.
 
 OUTPUT SCHEMA:
@@ -230,6 +238,7 @@ OUTPUT SCHEMA:
       "origin": "string — one of: claude_round1 | gpt_round2",
       "decision": "string — one of: corrected | maintained",
       "correction_applied": "string | null — the correction if applied",
+      "suggested_split": "string[] | null — required when decision=corrected AND error=abusive_merge; null otherwise",
       "reasoning": "string — justification of the final decision"
     }
   ]

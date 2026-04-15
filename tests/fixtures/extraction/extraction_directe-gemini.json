@@ -1,14 +1,14 @@
 [
-  {
-    "term": "variance",
-    "category": "property",
-    "explicit_in_source": true,
-    "justification": "central question of the research"
-  },
-  {
-    "term": "extraction_directe-specific-concept",
-    "category": "property",
-    "explicit_in_source": false,
-    "justification": "gemini-unique"
-  }
+	{
+		"term": "variance",
+		"category": "property",
+		"explicit_in_source": true,
+		"justification": "central question of the research"
+	},
+	{
+		"term": "extraction_directe-specific-concept",
+		"category": "property",
+		"explicit_in_source": false,
+		"justification": "gemini-unique"
+	}
 ]

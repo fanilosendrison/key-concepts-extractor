@@ -1,7 +1,7 @@
 ---
 id: NIB-M-QUALITY-CONTROLLER
 type: nib-module
-version: "1.0.0"
+version: "1.1.0"
 scope: key-concepts-extractor/quality-controller
 status: approved
 consumers: [claude-code]
@@ -48,6 +48,7 @@ interface QualityCorrection {
   error_type: 'abusive_merge' | 'incorrect_categorization' | 'justification_incoherence';
   target: string;
   correction: string;
+  suggested_split: string[] | null;   // Required non-null for abusive_merge (≥2 distinct terms, none === target)
   flagged_by: 'claude' | 'gpt';
   confirmed_by: 'claude' | 'gpt' | null;
   justification: string;
@@ -184,8 +185,10 @@ function applyCorrections(list, corrections): typeof list {
   for (const correction of corrections) {
     switch (correction.error_type) {
       case 'abusive_merge':
-        // Split the cluster: find the concept, replace with split concepts
-        // Implementation: find concept by target term, duplicate with separated terms
+        // Replace the target concept with N split concepts built from suggested_split.
+        // Each split concept inherits `category`, `granularity`, `explicit_in_source`,
+        // and `justifications` from the target. `term` and `variants` come from suggested_split.
+        // QC may re-flag on subsequent pass if inherited category/granularity is incorrect.
         result = splitCluster(result, correction);
         break;
       case 'incorrect_categorization':
@@ -202,6 +205,16 @@ function applyCorrections(list, corrections): typeof list {
   return result;
 }
 ```
+
+**Inheritance rule for splits** : a concept resulting from `splitCluster` inherits from the target :
+- `category`
+- `granularity` (when present, i.e. for `FinalConcept`)
+- `explicit_in_source`
+- `justifications`
+
+Only `term` and `variants` are overridden from `suggested_split`. Other fields follow the domain type (e.g. `found_by_models`, `consensus`, `angle_provenance`) are inherited as-is.
+
+**Schema validation** : before applying a correction with `error_type === "abusive_merge"`, the controller MUST validate that `suggested_split` is a non-empty array with at least 2 distinct strings, none of which equals `target`. On validation failure → **fail-closed** : raise a schema violation error, do not apply any subsequent correction, run status = `failed`. See §6.
 
 ---
 
@@ -240,8 +253,9 @@ Result: list unchanged, 1 round used
 | Claude flags 0 errors | Return immediately, 1 round, no corrections |
 | GPT confirms all Claude errors | 2 rounds, all corrections applied |
 | GPT contests all + adds nothing | 3 rounds needed (disagreement triggers R3) |
-| Correction target not found in list | Skip correction, log warning |
+| Correction target not found in list | Skip correction, log warning (data lookup miss, non-fatal) |
 | Split produces concept already in list | Keep both (dedup is not this module's job) |
+| `abusive_merge` correction missing `suggested_split` (null, empty, < 2 items, duplicates, or contains target) | **Fail-closed** : raise schema violation, abort run, mark `status = failed`. Distinct from "target not found" above — this is a contract violation by the LLM, not a data miss. |
 
 ---
 

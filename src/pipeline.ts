@@ -3,7 +3,7 @@ import { verifyCoverage } from "./domain/coverage-verifier.js";
 import { generateDiagnostics } from "./domain/diagnostics.js";
 import { FatalLLMError } from "./domain/errors.js";
 import { runExtraction } from "./domain/extraction-orchestrator.js";
-import { fuseInterAngle } from "./domain/fusion-inter.js";
+import { DEFAULT_EMBEDDING_THRESHOLD, fuseInterAngle } from "./domain/fusion-inter.js";
 import { fuseIntraAngle } from "./domain/fusion-intra.js";
 import { processInput } from "./domain/input-processor.js";
 import type { EmbeddingAdapter, ProviderAdapter } from "./domain/ports.js";
@@ -11,13 +11,15 @@ import { runQualityControl } from "./domain/quality-controller.js";
 import { runRelevanceControl } from "./domain/relevance-controller.js";
 import {
 	CANONICAL_ANGLES,
+	CANONICAL_PROVIDERS,
 	type FinalConcept,
 	type InputFile,
 	type MergedConcept,
+	type MergedOutput,
 	type PipelinePhase,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
-import { createRunManager } from "./infra/run-manager.js";
+import { createRunManager, type RunManager } from "./infra/run-manager.js";
 
 export interface PipelineDeps {
 	anthropic: ProviderAdapter;
@@ -25,6 +27,9 @@ export interface PipelineDeps {
 	google: ProviderAdapter;
 	embeddings: EmbeddingAdapter;
 	baseDir: string;
+	// NIB-M-WEB-SERVER §2.2 : web server pre-creates the RunManager (for synchronous
+	// run_id return in POST /api/runs) then passes it here. CLI path leaves this undefined.
+	runManager?: RunManager;
 	signal?: AbortSignal | undefined;
 }
 
@@ -43,7 +48,8 @@ export async function runPipeline(
 	deps: PipelineDeps,
 ): Promise<PipelineResult> {
 	const runsDir = join(deps.baseDir, "runs");
-	const runManager = createRunManager(runsDir);
+	const runManager = deps.runManager ?? createRunManager(runsDir);
+	// initRun is idempotent: safe whether the caller already initialized or not.
 	await runManager.initRun();
 	const logger = createEventLogger(runManager.runDir);
 
@@ -152,27 +158,40 @@ export async function runPipeline(
 		});
 		emit("fusion_inter", "fusion_inter_complete", { count: finalConcepts.length });
 
-		const interQuality = await runQualityControl({
-			mergedList: finalConcepts as unknown as MergedConcept[],
+		const interQuality = await runQualityControl<FinalConcept>({
+			mergedList: finalConcepts,
 			context: processed.context,
 			scope: "inter_angle",
 			anthropic: deps.anthropic,
 			openai: deps.openai,
 			emit: (type, payload) => emit("fusion_inter", type, payload),
 		});
-		finalConcepts = interQuality.correctedList as unknown as FinalConcept[];
+		finalConcepts = interQuality.correctedList;
 
-		const interRelevance = await runRelevanceControl({
-			mergedList: finalConcepts as unknown as MergedConcept[],
+		const interRelevance = await runRelevanceControl<FinalConcept>({
+			mergedList: finalConcepts,
 			context: processed.context,
 			scope: "inter_angle",
 			anthropic: deps.anthropic,
 			openai: deps.openai,
 			emit: (type, payload) => emit("fusion_inter", type, payload),
 		});
-		finalConcepts = interRelevance.filteredList as unknown as FinalConcept[];
+		finalConcepts = interRelevance.filteredList;
 
-		await runManager.persistInterAngle(finalConcepts);
+		// NIB-S-KCE §3.5 : persist MergedOutput wrapper with metadata; diagnostics is null
+		// here and filled in the 2-pass write performed by persistDiagnostics below.
+		const mergedOutput: MergedOutput = {
+			metadata: {
+				models: [...CANONICAL_PROVIDERS],
+				angles: CANONICAL_ANGLES,
+				total_passes: CANONICAL_ANGLES.length * CANONICAL_PROVIDERS.length,
+				fusion_similarity_threshold: DEFAULT_EMBEDDING_THRESHOLD,
+				date: new Date().toISOString().slice(0, 10),
+			},
+			concepts: finalConcepts,
+			diagnostics: null,
+		};
+		await runManager.persistInterAngle(mergedOutput);
 		await runManager.persistInterAngleQuality(interQuality.report);
 		await runManager.persistInterAngleRelevance(interRelevance.report);
 

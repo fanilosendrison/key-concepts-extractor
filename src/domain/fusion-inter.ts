@@ -15,7 +15,7 @@ export interface InterAngleInput {
 	embeddingThreshold?: number;
 }
 
-const DEFAULT_EMBEDDING_THRESHOLD = 0.85;
+export const DEFAULT_EMBEDDING_THRESHOLD = 0.85;
 
 interface TaggedItem {
 	concept: MergedConcept;

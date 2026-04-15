@@ -8,16 +8,17 @@ import {
 	RELEVANCE_R3_USER,
 } from "./control-prompts.js";
 import type { ProviderAdapter } from "./ports.js";
-import type {
-	ControlScope,
-	MergedConcept,
-	RelevanceRemoval,
-	RelevanceReport,
-	RelevanceRetention,
+import {
+	type ControllableConcept,
+	type ControlScope,
+	getTerm,
+	type RelevanceRemoval,
+	type RelevanceReport,
+	type RelevanceRetention,
 } from "./types.js";
 
-export interface RelevanceInput {
-	mergedList: MergedConcept[];
+export interface RelevanceInput<T extends ControllableConcept> {
+	mergedList: T[];
 	context: string;
 	scope: ControlScope;
 	anthropic: ProviderAdapter;
@@ -25,8 +26,8 @@ export interface RelevanceInput {
 	emit?: (type: string, payload: Record<string, unknown>) => void;
 }
 
-export interface RelevanceOutput {
-	filteredList: MergedConcept[];
+export interface RelevanceOutput<T extends ControllableConcept> {
+	filteredList: T[];
 	report: RelevanceReport;
 }
 
@@ -56,7 +57,9 @@ interface R3Output {
 	final_decisions: R3Decision[];
 }
 
-export async function runRelevanceControl(input: RelevanceInput): Promise<RelevanceOutput> {
+export async function runRelevanceControl<T extends ControllableConcept>(
+	input: RelevanceInput<T>,
+): Promise<RelevanceOutput<T>> {
 	const mergedListJson = JSON.stringify(input.mergedList);
 	const emit = input.emit ?? (() => {});
 
@@ -170,7 +173,7 @@ export async function runRelevanceControl(input: RelevanceInput): Promise<Releva
 		}
 	}
 
-	const filteredList = input.mergedList.filter((c) => !termsToRemove.has(c.term.toLowerCase()));
+	const filteredList = input.mergedList.filter((c) => !termsToRemove.has(getTerm(c).toLowerCase()));
 	const roundsUsed = r3 ? 3 : 2;
 
 	return {

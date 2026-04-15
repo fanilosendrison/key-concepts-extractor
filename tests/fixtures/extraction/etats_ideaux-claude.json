@@ -1,14 +1,14 @@
 [
-  {
-    "term": "variance",
-    "category": "property",
-    "explicit_in_source": true,
-    "justification": "central question of the research"
-  },
-  {
-    "term": "reliability",
-    "category": "property",
-    "explicit_in_source": true,
-    "justification": "angle-specific concept"
-  }
+	{
+		"term": "variance",
+		"category": "property",
+		"explicit_in_source": true,
+		"justification": "central question of the research"
+	},
+	{
+		"term": "reliability",
+		"category": "property",
+		"explicit_in_source": true,
+		"justification": "angle-specific concept"
+	}
 ]

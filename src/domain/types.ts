@@ -105,6 +105,9 @@ export interface QualityCorrection {
 	error_type: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
 	target: string;
 	correction: string;
+	// NIB-M-QUALITY-CONTROLLER §3 + §4.4: non-null for abusive_merge (≥2 distinct terms, none === target).
+	// Validated fail-closed in QC before applyCorrections.
+	suggested_split: string[] | null;
 	flagged_by: "claude" | "gpt";
 	confirmed_by: "claude" | "gpt" | null;
 	justification: string;
@@ -145,4 +148,34 @@ export interface DiagnosticsReport {
 	unanimous_concepts: number;
 	total_after_inter_angle: number;
 	fragile: number;
+}
+
+// NIB-S-KCE §3.5 : persisted format of fusion-inter/merged.json.
+export interface MergedOutputMetadata {
+	models: ProviderId[];
+	angles: readonly AngleId[];
+	total_passes: number;
+	fusion_similarity_threshold: number;
+	date: string; // YYYY-MM-DD
+}
+
+export interface MergedOutput {
+	metadata: MergedOutputMetadata;
+	concepts: FinalConcept[];
+	diagnostics: DiagnosticsReport | null;
+}
+
+// NIB-M-QUALITY-CONTROLLER §2 + NIB-M-RELEVANCE-CONTROLLER §2:
+// controllers accept either angle-level MergedConcept[] or inter-angle FinalConcept[].
+export type ControllableConcept = MergedConcept | FinalConcept;
+
+export function getTerm(c: ControllableConcept): string {
+	return "term" in c ? c.term : c.canonical_term;
+}
+
+export function withTerm<T extends ControllableConcept>(concept: T, term: string): T {
+	if ("term" in concept) {
+		return { ...concept, term, variants: [term] };
+	}
+	return { ...concept, canonical_term: term, variants: [term] };
 }
