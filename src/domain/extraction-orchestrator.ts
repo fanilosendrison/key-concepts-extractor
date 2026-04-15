@@ -80,11 +80,13 @@ export function buildExtractionRequest(
 	context: string,
 	angle: AngleId,
 	provider: ProviderLongId,
+	signal?: AbortSignal,
 ): LLMRequest {
 	return {
 		systemPrompt: TYPE1_SYSTEM_PROMPT.replace("{angle_prompt}", ANGLE_PROMPTS[angle]),
 		userPrompt: TYPE1_USER_PROMPT.replace("{context}", context),
 		provider,
+		signal,
 	};
 }
 
@@ -127,7 +129,7 @@ export async function runExtraction(
 		const anglePasses = await Promise.all(
 			PROVIDER_PAIRS.map(async ({ long, short }) => {
 				deps.emit?.("extraction_start", { angle, model: short });
-				const request = buildExtractionRequest(context, angle, long);
+				const request = buildExtractionRequest(context, angle, long, deps.signal);
 				const adapter = deps.adapters[long];
 				const response = await adapter.call(request);
 				const concepts = parseExtractionResponse(response.content);

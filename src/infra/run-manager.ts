@@ -5,12 +5,16 @@ import { join } from "node:path";
 import type {
 	AngleId,
 	DiagnosticsReport,
+	MergedConcept,
 	MergedOutput,
-	RunConfig,
 	ProviderId,
+	QualityReport,
 	RawConcept,
+	RelevanceReport,
+	RunConfig,
 	RunManifest,
 } from "../domain/types.js";
+import { logger } from "./logger.js";
 
 export interface RunManager {
 	readonly runId: string;
@@ -21,12 +25,12 @@ export interface RunManager {
 		provider: ProviderId,
 		concepts: RawConcept[],
 	): Promise<void>;
-	persistIntraAngle(angle: AngleId, payload: unknown): Promise<void>;
-	persistIntraAngleQuality(angle: AngleId, report: unknown): Promise<void>;
-	persistIntraAngleRelevance(angle: AngleId, report: unknown): Promise<void>;
+	persistIntraAngle(angle: AngleId, concepts: MergedConcept[]): Promise<void>;
+	persistIntraAngleQuality(angle: AngleId, report: QualityReport): Promise<void>;
+	persistIntraAngleRelevance(angle: AngleId, report: RelevanceReport): Promise<void>;
 	persistInterAngle(merged: MergedOutput): Promise<void>;
-	persistInterAngleQuality(report: unknown): Promise<void>;
-	persistInterAngleRelevance(report: unknown): Promise<void>;
+	persistInterAngleQuality(report: QualityReport): Promise<void>;
+	persistInterAngleRelevance(report: RelevanceReport): Promise<void>;
 	persistDiagnostics(report: DiagnosticsReport): Promise<void>;
 	persistPromptFile(prompt: string): Promise<void>;
 	persistInputFile(normalizedName: string, content: string): Promise<void>;
@@ -131,6 +135,14 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 				const merged = await readJson<MergedOutput>(mergedPath);
 				merged.diagnostics = report;
 				await writeJson(mergedPath, merged);
+			} else {
+				// Invariant: persistInterAngle must run before persistDiagnostics. Hitting this
+				// branch means the pipeline ordering broke or merged.json was deleted — surface
+				// it so the gap doesn't stay silent.
+				logger.warn(
+					{ runId: id, mergedPath },
+					"persistDiagnostics: merged.json missing; diagnostics written to diagnostics.json only",
+				);
 			}
 		},
 

@@ -16,8 +16,18 @@ export interface CoverageOutput {
 	stats: CoverageStats;
 }
 
+// Escape regex metacharacters so user-supplied term is matched as a literal.
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Word-boundary match: "AI" must not match "brain", "ML" must not match "MLLM".
+// \b is Unicode-aware enough for ASCII terms; spec §6 acknowledges mixed-script edge cases.
 function checkExplicit(term: string, sourceText: string): boolean {
-	return sourceText.toLowerCase().includes(term.toLowerCase());
+	const trimmed = term.trim();
+	if (trimmed.length === 0) return false;
+	const pattern = new RegExp(`\\b${escapeRegex(trimmed)}\\b`, "i");
+	return pattern.test(sourceText);
 }
 
 function isFragile(concept: FinalConcept): boolean {

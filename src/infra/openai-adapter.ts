@@ -2,9 +2,9 @@ import { FatalLLMError, TransientLLMError } from "../domain/errors.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../domain/ports.js";
 import {
 	classifyHttp,
+	composeSignal,
 	type ProviderAdapterConfig,
 	runWithRetry,
-	TIMEOUT_MS,
 } from "./provider-shared.js";
 
 const DEFAULT_ENDPOINT = "https://api.openai.com";
@@ -22,38 +22,42 @@ export function createOpenAIAdapter(config: ProviderAdapterConfig): ProviderAdap
 	return {
 		provider: "openai",
 		async call(request: LLMRequest): Promise<LLMResponse> {
-			const { content, latencyMs } = await runWithRetry("openai", async () => {
-				const res = await fetch(`${endpoint}/v1/chat/completions`, {
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${config.apiKey}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						model: config.model,
-						reasoning_effort: "high",
-						messages: [
-							{ role: "system", content: request.systemPrompt },
-							{ role: "user", content: request.userPrompt },
-						],
-					}),
-					signal: AbortSignal.timeout(TIMEOUT_MS),
-				});
-				if (!res.ok) {
-					throw classifyHttp(res.status, await res.text());
-				}
-				const data = (await res.json()) as OpenAIResponse;
-				const choice = data.choices[0];
-				if (!choice) throw new Error("No choice in OpenAI response");
-				// DC-OPENAI §5: truncated output is retriable
-				if (choice.finish_reason === "length") {
-					throw new TransientLLMError("OpenAI output truncated (finish_reason=length)");
-				}
-				if (choice.finish_reason === "content_filter") {
-					throw new FatalLLMError("OpenAI refused content (finish_reason=content_filter)");
-				}
-				return choice.message.content;
-			});
+			const { content, latencyMs } = await runWithRetry(
+				"openai",
+				async () => {
+					const res = await fetch(`${endpoint}/v1/chat/completions`, {
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${config.apiKey}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							model: config.model,
+							reasoning_effort: "high",
+							messages: [
+								{ role: "system", content: request.systemPrompt },
+								{ role: "user", content: request.userPrompt },
+							],
+						}),
+						signal: composeSignal(request.signal),
+					});
+					if (!res.ok) {
+						throw classifyHttp(res.status, await res.text());
+					}
+					const data = (await res.json()) as OpenAIResponse;
+					const choice = data.choices[0];
+					if (!choice) throw new Error("No choice in OpenAI response");
+					// DC-OPENAI §5: truncated output is retriable
+					if (choice.finish_reason === "length") {
+						throw new TransientLLMError("OpenAI output truncated (finish_reason=length)");
+					}
+					if (choice.finish_reason === "content_filter") {
+						throw new FatalLLMError("OpenAI refused content (finish_reason=content_filter)");
+					}
+					return choice.message.content;
+				},
+				request.signal,
+			);
 			return {
 				content,
 				provider: "openai",

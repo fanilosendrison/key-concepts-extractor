@@ -1,9 +1,9 @@
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../domain/ports.js";
 import {
 	classifyHttp,
+	composeSignal,
 	type ProviderAdapterConfig,
 	runWithRetry,
-	TIMEOUT_MS,
 } from "./provider-shared.js";
 
 const DEFAULT_ENDPOINT = "https://api.anthropic.com";
@@ -25,33 +25,37 @@ export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderA
 	return {
 		provider: "anthropic",
 		async call(request: LLMRequest): Promise<LLMResponse> {
-			const { content, latencyMs } = await runWithRetry("anthropic", async () => {
-				const res = await fetch(`${endpoint}/v1/messages`, {
-					method: "POST",
-					headers: {
-						"x-api-key": config.apiKey,
-						"anthropic-version": API_VERSION,
-						"content-type": "application/json",
-					},
-					body: JSON.stringify({
-						model: config.model,
-						max_tokens: 16384,
-						thinking: { type: "enabled", budget_tokens: 10000 },
-						system: request.systemPrompt,
-						messages: [{ role: "user", content: request.userPrompt }],
-					}),
-					signal: AbortSignal.timeout(TIMEOUT_MS),
-				});
-				if (!res.ok) {
-					throw classifyHttp(res.status, await res.text());
-				}
-				const data = (await res.json()) as { content: AnthropicBlock[] };
-				const textBlock = data.content.find((b): b is AnthropicTextBlock => b.type === "text");
-				if (!textBlock) {
-					throw new Error("No text block in Anthropic response");
-				}
-				return textBlock.text;
-			});
+			const { content, latencyMs } = await runWithRetry(
+				"anthropic",
+				async () => {
+					const res = await fetch(`${endpoint}/v1/messages`, {
+						method: "POST",
+						headers: {
+							"x-api-key": config.apiKey,
+							"anthropic-version": API_VERSION,
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({
+							model: config.model,
+							max_tokens: 16384,
+							thinking: { type: "enabled", budget_tokens: 10000 },
+							system: request.systemPrompt,
+							messages: [{ role: "user", content: request.userPrompt }],
+						}),
+						signal: composeSignal(request.signal),
+					});
+					if (!res.ok) {
+						throw classifyHttp(res.status, await res.text());
+					}
+					const data = (await res.json()) as { content: AnthropicBlock[] };
+					const textBlock = data.content.find((b): b is AnthropicTextBlock => b.type === "text");
+					if (!textBlock) {
+						throw new Error("No text block in Anthropic response");
+					}
+					return textBlock.text;
+				},
+				request.signal,
+			);
 			return {
 				content,
 				provider: "anthropic",

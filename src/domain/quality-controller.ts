@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { fillTemplate } from "./collection-utils.js";
 import {
 	QUALITY_R1_SYSTEM,
@@ -31,41 +32,43 @@ export interface QualityOutput<T extends ControllableConcept> {
 	report: QualityReport;
 }
 
-interface R1Error {
-	target: string;
-	error_type: QualityCorrection["error_type"];
-	justification?: string;
-	description?: string;
-	proposed_correction?: string;
-	suggested_split?: string[] | null;
-}
+// NIB-M-QUALITY-CONTROLLER §6: fail-closed on schema violations at R1/R2/R3 boundaries.
+const R1ErrorSchema = z.object({
+	target: z.string(),
+	error_type: z.enum(["abusive_merge", "incorrect_categorization", "justification_incoherence"]),
+	justification: z.string().optional(),
+	description: z.string().optional(),
+	proposed_correction: z.string().optional(),
+	suggested_split: z.array(z.string()).nullable().optional(),
+});
+const R1OutputSchema = z.object({
+	errors_found: z.array(R1ErrorSchema).default([]),
+	no_error_count: z.number().optional(),
+});
+const R2ReviewSchema = z.object({
+	target: z.string(),
+	verdict: z.enum(["confirmed", "contested"]),
+	justification: z.string().optional(),
+});
+const R2OutputSchema = z.object({
+	reviews_of_claude: z.array(R2ReviewSchema).default([]),
+	additional_errors: z.array(R1ErrorSchema).default([]),
+});
+const R3DecisionSchema = z.object({
+	target: z.string(),
+	decision: z.enum(["corrected", "maintained"]),
+	reasoning: z.string().optional(),
+	suggested_split: z.array(z.string()).nullable().optional(),
+});
+const R3OutputSchema = z.object({
+	final_decisions: z.array(R3DecisionSchema).default([]),
+});
 
-interface R1Output {
-	errors_found: R1Error[];
-	no_error_count?: number;
-}
-
-interface R2Review {
-	target: string;
-	verdict: "confirmed" | "contested";
-	justification?: string;
-}
-
-interface R2Output {
-	reviews_of_claude: R2Review[];
-	additional_errors: R1Error[];
-}
-
-interface R3Decision {
-	target: string;
-	decision: "corrected" | "maintained";
-	reasoning?: string;
-	suggested_split?: string[] | null;
-}
-
-interface R3Output {
-	final_decisions: R3Decision[];
-}
+type R1Error = z.infer<typeof R1ErrorSchema>;
+type R1Output = z.infer<typeof R1OutputSchema>;
+type R2Output = z.infer<typeof R2OutputSchema>;
+type R3Decision = z.infer<typeof R3DecisionSchema>;
+type R3Output = z.infer<typeof R3OutputSchema>;
 
 export class QualityControlSchemaError extends Error {
 	constructor(message: string) {
@@ -134,6 +137,41 @@ function resolveSuggestedSplit(
 	return error.suggested_split;
 }
 
+async function callLLMRound<O>(
+	adapter: ProviderAdapter,
+	provider: "anthropic" | "openai",
+	systemPrompt: string,
+	userPromptTemplate: string,
+	templateVars: Record<string, string>,
+	round: 1 | 2 | 3,
+	model: "claude" | "gpt",
+	scope: ControlScope,
+	emit: (type: string, payload: Record<string, unknown>) => void,
+	schema: z.ZodType<O>,
+): Promise<O> {
+	emit("control_start", { control: "quality", round, model, scope });
+	const response = await adapter.call({
+		systemPrompt,
+		userPrompt: fillTemplate(userPromptTemplate, templateVars),
+		provider,
+	});
+	let raw: unknown;
+	try {
+		raw = JSON.parse(response.content);
+	} catch (e) {
+		throw new QualityControlSchemaError(
+			`Quality R${round} (${model}): invalid JSON response: ${(e as Error).message}`,
+		);
+	}
+	const parsed = schema.safeParse(raw);
+	if (!parsed.success) {
+		throw new QualityControlSchemaError(
+			`Quality R${round} (${model}): schema validation failed: ${parsed.error.message}`,
+		);
+	}
+	return parsed.data;
+}
+
 export async function runQualityControl<T extends ControllableConcept>(
 	input: QualityInput<T>,
 ): Promise<QualityOutput<T>> {
@@ -141,17 +179,19 @@ export async function runQualityControl<T extends ControllableConcept>(
 	const emit = input.emit ?? (() => {});
 	const warn = (payload: Record<string, unknown>) => emit("quality_warning", payload);
 
-	emit("control_start", { control: "quality", round: 1, model: "claude", scope: input.scope });
-	const r1Response = await input.anthropic.call({
-		systemPrompt: QUALITY_R1_SYSTEM,
-		userPrompt: fillTemplate(QUALITY_R1_USER, {
-			context: input.context,
-			merged_list: mergedListJson,
-		}),
-		provider: "anthropic",
-	});
-	const r1 = JSON.parse(r1Response.content) as R1Output;
-	const errorsR1 = r1.errors_found ?? [];
+	const r1 = await callLLMRound<R1Output>(
+		input.anthropic,
+		"anthropic",
+		QUALITY_R1_SYSTEM,
+		QUALITY_R1_USER,
+		{ context: input.context, merged_list: mergedListJson },
+		1,
+		"claude",
+		input.scope,
+		emit,
+		R1OutputSchema,
+	);
+	const errorsR1 = r1.errors_found;
 
 	if (errorsR1.length === 0) {
 		return {
@@ -166,37 +206,47 @@ export async function runQualityControl<T extends ControllableConcept>(
 		};
 	}
 
-	emit("control_start", { control: "quality", round: 2, model: "gpt", scope: input.scope });
-	const r2Response = await input.openai.call({
-		systemPrompt: QUALITY_R2_SYSTEM,
-		userPrompt: fillTemplate(QUALITY_R2_USER, {
+	const r2 = await callLLMRound<R2Output>(
+		input.openai,
+		"openai",
+		QUALITY_R2_SYSTEM,
+		QUALITY_R2_USER,
+		{
 			context: input.context,
 			merged_list: mergedListJson,
 			claude_findings: JSON.stringify(r1),
-		}),
-		provider: "openai",
-	});
-	const r2 = JSON.parse(r2Response.content) as R2Output;
-	const reviews = r2.reviews_of_claude ?? [];
-	const additional = r2.additional_errors ?? [];
+		},
+		2,
+		"gpt",
+		input.scope,
+		emit,
+		R2OutputSchema,
+	);
+	const reviews = r2.reviews_of_claude;
+	const additional = r2.additional_errors;
 
 	const hasDisagreement = reviews.some((r) => r.verdict === "contested");
 	const hasAdditional = additional.length > 0;
 
 	let r3: R3Output | null = null;
 	if (hasDisagreement || hasAdditional) {
-		emit("control_start", { control: "quality", round: 3, model: "claude", scope: input.scope });
-		const r3Response = await input.anthropic.call({
-			systemPrompt: QUALITY_R3_SYSTEM,
-			userPrompt: fillTemplate(QUALITY_R3_USER, {
+		r3 = await callLLMRound<R3Output>(
+			input.anthropic,
+			"anthropic",
+			QUALITY_R3_SYSTEM,
+			QUALITY_R3_USER,
+			{
 				context: input.context,
 				merged_list: mergedListJson,
 				claude_findings: JSON.stringify(r1),
 				gpt_findings: JSON.stringify(r2),
-			}),
-			provider: "anthropic",
-		});
-		r3 = JSON.parse(r3Response.content) as R3Output;
+			},
+			3,
+			"claude",
+			input.scope,
+			emit,
+			R3OutputSchema,
+		);
 	}
 
 	const corrections: QualityCorrection[] = [];

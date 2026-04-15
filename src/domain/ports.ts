@@ -4,6 +4,7 @@ export interface LLMRequest {
 	systemPrompt: string;
 	userPrompt: string;
 	provider: ProviderLongId;
+	signal?: AbortSignal | undefined;
 }
 
 export interface LLMResponse {

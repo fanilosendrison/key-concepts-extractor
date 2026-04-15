@@ -31,20 +31,22 @@ interface Cluster {
 	centroid: number[];
 }
 
-/**
- * Similarity function: max_i(u[i] * v[i]).
- * With mock-embedding (vec_A[indexOf(B)] = sim(A,B)), this recovers the encoded
- * pairwise similarity. For sparse one-hot-like vectors with only self-index set,
- * it yields 1 for identical terms and 0 for distinct terms.
- */
+// Cosine similarity per NIB-M-FUSION-INTER §4.2.
+// Zero-norm vectors (either side) yield 0 rather than NaN — defensive.
 function similarity(u: number[], v: number[]): number {
 	const len = Math.min(u.length, v.length);
-	let best = 0;
+	let dot = 0;
+	let normU = 0;
+	let normV = 0;
 	for (let i = 0; i < len; i++) {
-		const p = (u[i] ?? 0) * (v[i] ?? 0);
-		if (p > best) best = p;
+		const a = u[i] ?? 0;
+		const b = v[i] ?? 0;
+		dot += a * b;
+		normU += a * a;
+		normV += b * b;
 	}
-	return best;
+	if (normU === 0 || normV === 0) return 0;
+	return dot / (Math.sqrt(normU) * Math.sqrt(normV));
 }
 
 function meanVector(vectors: number[][]): number[] {
