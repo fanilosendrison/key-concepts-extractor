@@ -1,0 +1,9 @@
+# <type>(<scope>): <subject>
+#
+# Types: feat, fix, refactor, test, docs, chore, ci, perf, style
+# Scope: module or area affected (optional)
+# Subject: imperative, lowercase, no period
+#
+# Body: what and why (not how)
+#
+# Footer: BREAKING CHANGE: / Refs: / Closes:
