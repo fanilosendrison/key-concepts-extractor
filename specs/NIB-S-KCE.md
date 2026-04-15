@@ -214,6 +214,9 @@ interface QualityCorrection {
   error_type: 'abusive_merge' | 'incorrect_categorization' | 'justification_incoherence';
   target: string;
   correction: string;
+  // Required non-null for abusive_merge (≥2 distinct terms, none === target).
+  // Validated fail-closed in QC before applyCorrections — see NIB-M-QUALITY-CONTROLLER §3, §4.4.
+  suggested_split: string[] | null;
   flagged_by: 'claude' | 'gpt';
   confirmed_by: 'claude' | 'gpt' | null;
   justification: string;
@@ -242,20 +245,20 @@ interface RelevanceReport {
   removed: RelevanceRemoval[];
   retained_after_dispute: RelevanceRetention[];
 }
+// Field naming follows NIB-M-LLM-PAYLOADS (`target`/`reason`) — the LLM
+// schema dictates the wire shape, propagated unchanged through the parser.
+// `confirmed_by` is nullable for the no-round-3 path (GPT-only flag retained).
 interface RelevanceRemoval {
-  term: string;
+  target: string;
+  reason: string;
   flagged_by: 'claude' | 'gpt';
-  confirmed_by: 'claude' | 'gpt';
-  justification_flagger: string;
-  justification_confirmer: string;
+  confirmed_by: 'claude' | 'gpt' | null;
 }
+// Minimal shape: only the audit signal (which term, how it was defended) is
+// kept. Per-round provenance can be recovered from events.jsonl if needed.
 interface RelevanceRetention {
-  term: string;
-  flagged_by: 'claude' | 'gpt';
-  defended_by: 'claude' | 'gpt';
-  justification_flagger: string;
-  counter_argument_defender: string;
-  final_decision: 'retained (désaccord = maintien)';
+  target: string;
+  defense: string;
 }
 ```
 
