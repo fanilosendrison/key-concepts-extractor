@@ -120,6 +120,48 @@ describe("QualityController", () => {
 		expect(targets).toContain("caching");
 	});
 
+	it("T-QC-MINIMAL: parser accepts bare-minimum LLM JSON (spec-mandated extras omitted)", async () => {
+		// Bypass the helpers on purpose: we validate the parser's tolerance layer
+		// against an LLM that omits every spec-optional field. If a future parser
+		// tightens one of these into a required field, this test fails first and
+		// forces an explicit decision (per discussion on fail-closed scope).
+		const r1Bare = JSON.stringify({
+			errors_found: [
+				{
+					target: "consistency / reliability",
+					error_type: "abusive_merge",
+					suggested_split: ["consistency", "reliability"],
+				},
+			],
+		});
+		const r2Bare = JSON.stringify({
+			reviews_of_claude: [{ target: "consistency / reliability", verdict: "confirmed" }],
+		});
+		const r3Bare = JSON.stringify({
+			final_decisions: [
+				{
+					target: "consistency / reliability",
+					decision: "corrected",
+					suggested_split: ["consistency", "reliability"],
+				},
+			],
+		});
+		// Pipeline short-circuits to 2 rounds when R2 confirms without contest.
+		// R3 queued but not consumed — asserted below.
+		const anthropic = createMockProvider("anthropic", [r1Bare, r3Bare]);
+		const openai = createMockProvider("openai", [r2Bare]);
+		const result = await runQualityControl({
+			mergedList: [mc("consistency / reliability")],
+			context: "source",
+			scope: "angle:etats_ideaux",
+			anthropic,
+			openai,
+		});
+		expect(result.report.review_rounds).toBe(2);
+		expect(result.correctedList.map((c) => c.term).sort()).toEqual(["consistency", "reliability"]);
+		expect(anthropic.remaining).toBe(1);
+	});
+
 	it("P-08: quality never decreases count", async () => {
 		const input = [mc("a"), mc("b")];
 		const result = await runQualityControl({

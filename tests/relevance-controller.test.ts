@@ -119,6 +119,33 @@ describe("RelevanceController", () => {
 		expect(result.filteredList.find((c) => c.term === "y")).toBeUndefined();
 	});
 
+	it("T-RC-MINIMAL: parser accepts bare-minimum LLM JSON (spec-mandated extras omitted)", async () => {
+		// Bypass the helpers on purpose: validate parser tolerance when the LLM
+		// omits confidence, summary, origin, and not_flagged_count. Pipeline must
+		// still complete without throwing.
+		const r1Bare = JSON.stringify({
+			flagged_off_topic: [{ term: "blockchain", justification: "unrelated" }],
+		});
+		const r2Bare = JSON.stringify({
+			reviews_of_claude: [
+				{ term: "blockchain", verdict: "confirmed_off_topic", justification: "agree" },
+			],
+		});
+		const r3Bare = JSON.stringify({
+			final_decisions: [{ term: "blockchain", decision: "removed", reasoning: "" }],
+		});
+		const anthropic = createMockProvider("anthropic", [r1Bare, r3Bare]);
+		const openai = createMockProvider("openai", [r2Bare]);
+		const result = await runRelevanceControl({
+			mergedList: [mc("blockchain"), mc("consistency")],
+			context: "source",
+			scope: "angle:etats_ideaux",
+			anthropic,
+			openai,
+		});
+		expect(result.filteredList.map((c) => c.term)).toEqual(["consistency"]);
+	});
+
 	it("P-07: never adds concepts", async () => {
 		const input = [mc("a"), mc("b"), mc("c")];
 		const result = await runRelevanceControl({
