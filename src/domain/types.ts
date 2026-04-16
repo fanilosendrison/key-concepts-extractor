@@ -127,6 +127,7 @@ export type PipelineEventType =
 	| "extraction_complete"
 	| "extraction_error"
 	| "extraction_progress"
+	| "concept_dropped"
 	| "fusion_intra_start"
 	| "fusion_intra_complete"
 	| "fusion_inter_start"
@@ -139,6 +140,12 @@ export type PipelineEventType =
 	| "run_complete"
 	| "run_error"
 	| "run_stopped";
+
+// Events that close the run; the CLI subscriber must receive them before process exit.
+export type TerminalEventType = Extract<
+	PipelineEventType,
+	"run_complete" | "run_error" | "run_stopped"
+>;
 
 export interface PipelineEvent {
 	timestamp: string;

@@ -88,7 +88,7 @@ interface AnthropicResponse {
 - **429 Too Many Requests** — rate limit. Retriable. `retry-after` header may be present.
 - **500 Internal Server Error** — Anthropic server error. Retriable.
 - **529 Overloaded** — API overloaded. Retriable.
-- **Network timeout** — no response within 120s. Retriable.
+- **Network timeout** — no response within 600s. Retriable.
 
 ---
 
@@ -131,7 +131,7 @@ const response = await fetch(endpoint + '/v1/messages', {
     system: request.systemPrompt,
     messages: [{ role: 'user', content: request.userPrompt }],
   }),
-  signal: AbortSignal.timeout(120000),
+  signal: AbortSignal.timeout(600000),
 });
 
 if (!response.ok) {

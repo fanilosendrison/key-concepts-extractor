@@ -98,7 +98,45 @@ export function buildExtractionRequest(
 	};
 }
 
-function parseExtractionResponse(raw: string): RawConcept[] {
+interface DroppedConcept {
+	term: string | undefined;
+	reason: string;
+}
+
+interface ParseResult {
+	concepts: RawConcept[];
+	dropped: DroppedConcept[];
+}
+
+function validateConceptEntry(item: unknown): { valid: RawConcept } | { drop: DroppedConcept } {
+	if (typeof item !== "object" || item === null) {
+		return { drop: { term: undefined, reason: "not an object" } };
+	}
+	const c = item as Record<string, unknown>;
+	const term = typeof c.term === "string" ? c.term : undefined;
+	if (
+		typeof c.term !== "string" ||
+		typeof c.category !== "string" ||
+		typeof c.granularity !== "string" ||
+		typeof c.justification !== "string"
+	) {
+		return {
+			drop: {
+				term,
+				reason: "missing required fields (term, category, granularity, justification)",
+			},
+		};
+	}
+	if (!CONCEPT_CATEGORY_SET.has(c.category)) {
+		return { drop: { term, reason: `category '${c.category}' not in closed set` } };
+	}
+	if (!GRANULARITY_LEVEL_SET.has(c.granularity)) {
+		return { drop: { term, reason: `granularity '${c.granularity}' not in closed set` } };
+	}
+	return { valid: item as RawConcept };
+}
+
+function parseExtractionResponse(raw: string): ParseResult {
 	const parsed = JSON.parse(raw) as unknown;
 	const list: unknown = Array.isArray(parsed)
 		? parsed
@@ -108,33 +146,23 @@ function parseExtractionResponse(raw: string): RawConcept[] {
 			"Extraction response is neither an array nor has a concepts[] field",
 		);
 	}
+	const concepts: RawConcept[] = [];
+	const dropped: DroppedConcept[] = [];
 	for (const item of list) {
-		if (typeof item !== "object" || item === null) {
-			throw new TransientLLMError("Invalid concept entry");
-		}
-		const c = item as Record<string, unknown>;
-		if (
-			typeof c.term !== "string" ||
-			typeof c.category !== "string" ||
-			typeof c.granularity !== "string" ||
-			typeof c.justification !== "string"
-		) {
-			throw new TransientLLMError(
-				"Concept missing required fields (term, category, granularity, justification)",
-			);
-		}
-		if (!CONCEPT_CATEGORY_SET.has(c.category)) {
-			throw new TransientLLMError(
-				`Concept category '${c.category}' not in NIB-S-KCE §3.14 closed set`,
-			);
-		}
-		if (!GRANULARITY_LEVEL_SET.has(c.granularity)) {
-			throw new TransientLLMError(
-				`Concept granularity '${c.granularity}' not in NIB-S-KCE §3.14 closed set`,
-			);
+		const result = validateConceptEntry(item);
+		if ("valid" in result) {
+			concepts.push(result.valid);
+		} else {
+			dropped.push(result.drop);
 		}
 	}
-	return list as RawConcept[];
+	// 100% dropped = LLM didn't understand the task at all → retriable
+	if (concepts.length === 0 && list.length > 0) {
+		throw new TransientLLMError(
+			`All ${list.length} concepts malformed — LLM did not follow the schema`,
+		);
+	}
+	return { concepts, dropped };
 }
 
 export async function runExtraction(
@@ -160,11 +188,21 @@ export async function runExtraction(
 				const request = buildExtractionRequest(context, angle, long, deps.signal);
 				const adapter = deps.adapters[long];
 				const response = await adapter.call(request);
-				const concepts = parseExtractionResponse(response.content);
+				const { concepts, dropped } = parseExtractionResponse(response.content);
+				if (dropped.length > 0) {
+					deps.emit?.("concept_dropped", {
+						angle,
+						model: short,
+						concepts_valid: concepts.length,
+						concepts_dropped: dropped.length,
+						samples: dropped.slice(0, 3),
+					});
+				}
 				deps.emit?.("extraction_complete", {
 					angle,
 					model: short,
 					concepts_count: concepts.length,
+					concepts_dropped: dropped.length,
 				});
 				const pass: ExtractionPass = { angle, provider: short, concepts };
 				if (deps.onPass) await deps.onPass(pass);

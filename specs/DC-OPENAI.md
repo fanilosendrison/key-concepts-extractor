@@ -123,7 +123,7 @@ const response = await fetch(endpoint + '/v1/chat/completions', {
       { role: 'user', content: request.userPrompt },
     ],
   }),
-  signal: AbortSignal.timeout(120000),
+  signal: AbortSignal.timeout(600000),
 });
 
 const data = await response.json();

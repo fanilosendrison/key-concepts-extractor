@@ -4,11 +4,17 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FatalLLMError } from "../src/domain/errors.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../src/domain/ports.js";
-import { DEFAULT_RUN_CONFIG, type RunConfig } from "../src/domain/types.js";
+import {
+	DEFAULT_RUN_CONFIG,
+	type PipelineEvent,
+	type RunConfig,
+	type TerminalEventType,
+} from "../src/domain/types.js";
+import { createEventLogger } from "../src/infra/event-logger.js";
+import { createRunManager } from "../src/infra/run-manager.js";
 import { runPipeline } from "../src/pipeline.js";
 import { loadFixture } from "./helpers/fixture-loader.js";
 import { createMockEmbedding } from "./helpers/mock-embedding.js";
-import { createMockProvider } from "./helpers/mock-provider.js";
 import { createPipelineHarness } from "./helpers/pipeline-harness.js";
 import { cleanupTempDir, createTempDir } from "./helpers/temp-dir.js";
 
@@ -104,6 +110,91 @@ describe("Pipeline integration", () => {
 			},
 		);
 		expect(result.status).toBe("stopped");
+	});
+
+	// Terminal events (run_complete/run_error/run_stopped) must reach stdout
+	// subscribers before runPipeline resolves — otherwise the CLI exits before
+	// the subscriber sees them. Regression guard against the fire-and-forget bug.
+	describe("T-INT-TERMINAL: subscriber sees terminal event before runPipeline resolves", () => {
+		async function collectTerminal(
+			run: () => Promise<{ runId: string }>,
+			runDir: string,
+		): Promise<TerminalEventType | null> {
+			const logger = createEventLogger(runDir);
+			let terminal: TerminalEventType | null = null;
+			const unsubscribe = logger.subscribe((event: PipelineEvent) => {
+				if (event.phase === "run" && terminal === null) {
+					terminal = event.type as TerminalEventType;
+				}
+			});
+			try {
+				await run();
+				return terminal;
+			} finally {
+				unsubscribe();
+			}
+		}
+
+		it("delivers run_complete on success", async () => {
+			const runManager = createRunManager(join(baseDir, "runs"));
+			const harness = createPipelineHarness();
+			const terminal = await collectTerminal(
+				() =>
+					runPipeline(
+						{ prompt: loadFixture("inputs/sample-vision.md") },
+						{ ...harness, baseDir, runManager },
+					),
+				runManager.runDir,
+			);
+			expect(terminal).toBe("run_complete");
+		});
+
+		it("delivers run_error on fatal failure", async () => {
+			const runManager = createRunManager(join(baseDir, "runs"));
+			const throwing: ProviderAdapter = {
+				provider: "anthropic",
+				async call(): Promise<LLMResponse> {
+					throw new FatalLLMError("bad");
+				},
+			};
+			const harness = createPipelineHarness();
+			const terminal = await collectTerminal(
+				() =>
+					runPipeline({ prompt: "test" }, { ...harness, anthropic: throwing, baseDir, runManager }),
+				runManager.runDir,
+			);
+			expect(terminal).toBe("run_error");
+		});
+
+		it("delivers run_stopped on abort", async () => {
+			const runManager = createRunManager(join(baseDir, "runs"));
+			const controller = new AbortController();
+			const makeSlow = (p: "anthropic" | "openai" | "google"): ProviderAdapter => ({
+				provider: p,
+				async call(): Promise<LLMResponse> {
+					await new Promise((r) => setTimeout(r, 50));
+					return { content: "[]", provider: p, model: "slow", latencyMs: 50 };
+				},
+			});
+			setTimeout(() => controller.abort(), 30);
+			const terminal = await collectTerminal(
+				() =>
+					runPipeline(
+						{ prompt: "test" },
+						{
+							anthropic: makeSlow("anthropic"),
+							openai: makeSlow("openai"),
+							google: makeSlow("google"),
+							embeddings: createMockEmbedding([]),
+							baseDir,
+							runManager,
+							signal: controller.signal,
+						},
+					),
+				runManager.runDir,
+			);
+			expect(terminal).toBe("run_stopped");
+		});
 	});
 
 	it.each([
