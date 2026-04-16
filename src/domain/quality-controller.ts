@@ -177,7 +177,12 @@ export async function runQualityControl<T extends ControllableConcept>(
 					split = resolveSuggestedSplit(error, r3Decision, "R1");
 				} catch (e) {
 					if (e instanceof ControlSchemaError) {
-						warn({ reason: "correction_dropped", target: error.target, error_type: error.error_type, detail: e.message });
+						warn({
+							reason: "correction_dropped",
+							target: error.target,
+							error_type: error.error_type,
+							detail: e.message,
+						});
 						continue;
 					}
 					throw e;
@@ -199,7 +204,12 @@ export async function runQualityControl<T extends ControllableConcept>(
 					split = resolveSuggestedSplit(error, r3Decision, "R2");
 				} catch (e) {
 					if (e instanceof ControlSchemaError) {
-						warn({ reason: "correction_dropped", target: error.target, error_type: error.error_type, detail: e.message });
+						warn({
+							reason: "correction_dropped",
+							target: error.target,
+							error_type: error.error_type,
+							detail: e.message,
+						});
 						continue;
 					}
 					throw e;

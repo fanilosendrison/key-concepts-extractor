@@ -120,7 +120,12 @@ function validateConceptEntry(item: unknown): { valid: RawConcept } | { drop: Dr
 		typeof c.granularity !== "string" ||
 		typeof c.justification !== "string"
 	) {
-		return { drop: { term, reason: "missing required fields (term, category, granularity, justification)" } };
+		return {
+			drop: {
+				term,
+				reason: "missing required fields (term, category, granularity, justification)",
+			},
+		};
 	}
 	if (!CONCEPT_CATEGORY_SET.has(c.category)) {
 		return { drop: { term, reason: `category '${c.category}' not in closed set` } };

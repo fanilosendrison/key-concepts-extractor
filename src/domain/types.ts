@@ -141,6 +141,12 @@ export type PipelineEventType =
 	| "run_error"
 	| "run_stopped";
 
+// Events that close the run; the CLI subscriber must receive them before process exit.
+export type TerminalEventType = Extract<
+	PipelineEventType,
+	"run_complete" | "run_error" | "run_stopped"
+>;
+
 export interface PipelineEvent {
 	timestamp: string;
 	phase: PipelinePhase;

@@ -15,7 +15,7 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 		it("T-PS-02: no external signal → composed is purely the timeout signal", () => {
 			const composed = composeSignal();
 			expect(composed.aborted).toBe(false);
-			// Only assertion we can make without waiting 120s : it's an AbortSignal.
+			// Only assertion we can make without waiting TIMEOUT_MS : it's an AbortSignal.
 			expect(composed).toBeInstanceOf(AbortSignal);
 		});
 	});

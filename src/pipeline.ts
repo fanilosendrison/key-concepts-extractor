@@ -21,6 +21,7 @@ import {
 	type PipelinePhase,
 	type RunConfig,
 	type RunSource,
+	type TerminalEventType,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
 import { createRunManager, type RunManager } from "./infra/run-manager.js";
@@ -64,6 +65,8 @@ export async function runPipeline(
 	await runManager.initRun(config, deps.source ?? "cli");
 	const logger = createEventLogger(runManager.runDir);
 
+	// Fire-and-forget: intermediate events tolerate loss on crash because
+	// the pipeline keeps emitting. Terminal events use emitTerminal below.
 	const emit = (
 		phase: PipelinePhase,
 		type: PipelineEventType,
@@ -72,7 +75,26 @@ export async function runPipeline(
 		void logger.emit({ phase, type, payload });
 	};
 
+	// Terminal events must reach subscribers before the CLI process exits.
+	// Swallowed on I/O failure so a failed flush can't shadow the run result.
+	const emitTerminal = async (
+		type: TerminalEventType,
+		payload: Record<string, unknown>,
+	): Promise<void> => {
+		try {
+			await logger.emit({ phase: "run", type, payload });
+		} catch {
+			// best-effort — the persisted run state is authoritative.
+		}
+	};
+
 	const checkSignal = (): boolean => deps.signal?.aborted === true;
+
+	const stopRunEarly = async (): Promise<PipelineResult> => {
+		await runManager.stopRun();
+		await emitTerminal("run_stopped", { reason: "user_requested" });
+		return { runId: runManager.runId, status: "stopped" };
+	};
 
 	try {
 		// Phase 1 — Input processing
@@ -94,11 +116,7 @@ export async function runPipeline(
 		}
 		await runManager.setInputFiles(processed.inputFiles.map((f) => f.normalizedName));
 
-		if (checkSignal()) {
-			await runManager.stopRun();
-			emit("run", "run_stopped", { reason: "user_requested" });
-			return { runId: runManager.runId, status: "stopped" };
-		}
+		if (checkSignal()) return stopRunEarly();
 
 		// Phase 2 — Extraction
 		const extractionPasses = await runExtraction(processed.context, {
@@ -113,11 +131,7 @@ export async function runPipeline(
 			signal: deps.signal,
 		});
 
-		if (checkSignal()) {
-			await runManager.stopRun();
-			emit("run", "run_stopped", { reason: "user_requested" });
-			return { runId: runManager.runId, status: "stopped" };
-		}
+		if (checkSignal()) return stopRunEarly();
 
 		// Phase 3 — Fusion intra-angle + controls
 		const intraResults: Array<{
@@ -160,11 +174,7 @@ export async function runPipeline(
 			intraResults.push({ angle, concepts });
 		}
 
-		if (checkSignal()) {
-			await runManager.stopRun();
-			emit("run", "run_stopped", { reason: "user_requested" });
-			return { runId: runManager.runId, status: "stopped" };
-		}
+		if (checkSignal()) return stopRunEarly();
 
 		// Phase 4 — Fusion inter-angle + controls
 		const byAngle: Parameters<typeof fuseInterAngle>[0]["byAngle"] = {};
@@ -239,7 +249,7 @@ export async function runPipeline(
 			fragile_concepts: coverage.stats.fragile,
 			unanimous_concepts: diagnostics.unanimous_concepts,
 		});
-		emit("run", "run_complete", {
+		await emitTerminal("run_complete", {
 			total_concepts: coverage.concepts.length,
 			run_dir: runManager.runDir,
 		});
@@ -247,14 +257,10 @@ export async function runPipeline(
 		return { runId: runManager.runId, status: "completed" };
 	} catch (error) {
 		// If the signal was aborted (graceful stop), record as stopped rather than failed
-		if (deps.signal?.aborted) {
-			await runManager.stopRun();
-			emit("run", "run_stopped", { reason: "user_requested" });
-			return { runId: runManager.runId, status: "stopped" };
-		}
+		if (deps.signal?.aborted) return stopRunEarly();
 		const isFatal = error instanceof FatalLLMError;
 		await runManager.failRun(error instanceof Error ? error : new Error(String(error)));
-		emit("run", "run_error", {
+		await emitTerminal("run_error", {
 			error: error instanceof Error ? error.message : String(error),
 			fatal: isFatal,
 		});
