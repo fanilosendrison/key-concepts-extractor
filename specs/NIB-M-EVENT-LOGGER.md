@@ -1,7 +1,7 @@
 ---
 id: NIB-M-EVENT-LOGGER
 type: nib-module
-version: "1.0.0"
+version: "2.0.0"
 scope: key-concepts-extractor/event-logger
 status: approved
 validates: [src/infra/event-logger.ts, tests/event-logger.test.ts]
@@ -27,13 +27,34 @@ class EventLogger {
   getEvents(): PipelineEvent[];  // Read all events from file
 }
 
+type PipelineEventType =
+  | 'input_processed'
+  | 'extraction_start'
+  | 'extraction_complete'
+  | 'extraction_error'
+  | 'extraction_progress'
+  | 'fusion_intra_start'
+  | 'fusion_intra_complete'
+  | 'fusion_inter_start'
+  | 'fusion_inter_complete'
+  | 'control_start'
+  | 'control_complete'
+  | 'control_result'
+  | 'quality_warning'
+  | 'coverage_complete'
+  | 'run_complete'
+  | 'run_error'
+  | 'run_stopped';
+
 interface PipelineEvent {
   timestamp: string;                 // ISO 8601 with ms, auto-generated
   phase: 'input' | 'extraction' | 'fusion_intra' | 'fusion_inter' | 'diagnostics' | 'run';
-  type: string;
+  type: PipelineEventType;
   payload: Record<string, unknown>;
 }
 ```
+
+Closed union : any emitter passing a type outside this set is a contract violation caught at compile time. See §4 for helper-function mapping.
 
 ---
 
@@ -76,11 +97,14 @@ function getEvents(): PipelineEvent[] {
 
 ## 4. Event types
 
-All event types from Spec v1.5 §13. Helper functions for type-safe event construction:
+Authoritative list of every `PipelineEventType` literal, with the helper function that constructs it. Adding a new event requires amending both §2 (union) and §4 (helper) in the same change.
 
 ```typescript
+// Phase: input
+function inputProcessed(files: number, prompt: 'provided' | 'none'): Omit<PipelineEvent, 'timestamp'>;
+
 // Phase: extraction
-function extractionStart(angle: AngleId, model: ProviderId): Omit<PipelineEvent, 'timestamp'>;
+function extractionStart(angle: AngleId, model: ProviderId): ...;
 function extractionComplete(angle: AngleId, model: ProviderId, conceptsCount: number): ...;
 function extractionError(angle: AngleId, model: ProviderId, error: string, retry: number): ...;
 function extractionProgress(completed: number, total: number): ...;
@@ -97,6 +121,9 @@ function fusionInterComplete(clusters: number, conceptsFinal: number): ...;
 function controlStart(controlType: 'quality' | 'relevance', round: number, model: 'claude' | 'gpt', scope: ControlScope): ...;
 function controlComplete(controlType: string, round: number, model: string, scope: ControlScope, count: number): ...;
 function controlResult(controlType: string, scope: ControlScope, roundsUsed: number, actionCount: number): ...;
+
+// Quality-controller non-fatal warning (e.g. correction target not found, §4.4 skip path)
+function qualityWarning(warning: string, detail: Record<string, unknown>): ...;
 
 // Phase: finalization
 function coverageComplete(stats: { explicit: number; implicit: number; fragile: number }): ...;

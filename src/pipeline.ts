@@ -17,6 +17,7 @@ import {
 	type InputFile,
 	type MergedConcept,
 	type MergedOutput,
+	type PipelineEventType,
 	type PipelinePhase,
 	type RunConfig,
 	type RunSource,
@@ -63,7 +64,11 @@ export async function runPipeline(
 	await runManager.initRun(config, deps.source ?? "cli");
 	const logger = createEventLogger(runManager.runDir);
 
-	const emit = (phase: PipelinePhase, type: string, payload: Record<string, unknown>) => {
+	const emit = (
+		phase: PipelinePhase,
+		type: PipelineEventType,
+		payload: Record<string, unknown>,
+	) => {
 		void logger.emit({ phase, type, payload });
 	};
 
@@ -169,6 +174,7 @@ export async function runPipeline(
 			byAngle,
 			embeddings: deps.embeddings,
 			embeddingThreshold: config.embedding_threshold,
+			signal: deps.signal,
 		});
 		emit("fusion_inter", "fusion_inter_complete", { count: finalConcepts.length });
 

@@ -14,6 +14,7 @@ export interface InterAngleInput {
 	byAngle: Partial<Record<AngleId, MergedConcept[]>>;
 	embeddings: EmbeddingAdapter;
 	embeddingThreshold?: number;
+	signal?: AbortSignal | undefined;
 }
 
 // Single source of truth for the 0.85 default lives in DEFAULT_RUN_CONFIG
@@ -81,7 +82,8 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 	if (allItems.length === 0) return [];
 
 	const uniqueTerms = [...new Set(allItems.map((it) => it.concept.term))];
-	const vectors = await input.embeddings.embed(uniqueTerms);
+	input.signal?.throwIfAborted();
+	const vectors = await input.embeddings.embed(uniqueTerms, { signal: input.signal });
 	const embeddingMap = new Map<string, number[]>();
 	uniqueTerms.forEach((term, i) => {
 		const vec = vectors[i];

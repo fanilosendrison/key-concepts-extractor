@@ -1,10 +1,10 @@
 import type { z } from "zod";
 import { fillTemplate } from "./collection-utils.js";
 import type { ProviderAdapter } from "./ports.js";
-import type { ControllableConcept, ControlScope } from "./types.js";
+import type { ControllableConcept, ControlScope, PipelineEventType } from "./types.js";
 
 export type ControlKind = "quality" | "relevance";
-export type EmitFn = (type: string, payload: Record<string, unknown>) => void;
+export type EmitFn = (type: PipelineEventType, payload: Record<string, unknown>) => void;
 
 // NIB-M-QUALITY-CONTROLLER §6 + NIB-M-RELEVANCE-CONTROLLER §6 :
 // fail-closed at every R1/R2/R3 trust boundary.

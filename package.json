@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "description": "CLI tool to extract key concepts from text via multiple LLM providers, merge results, and expose a web tracking interface",
   "type": "module",
+  "bin": {
+    "kce": "./src/cli/bin.ts"
+  },
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "lint": "biome check src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "kce": "node --experimental-strip-types src/cli/bin.ts"
   },
   "keywords": [
     "cli",

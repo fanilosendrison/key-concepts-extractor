@@ -1,13 +1,6 @@
-export interface ParsedCli {
-	command: "run" | "history" | "show" | "help";
-	options?: {
-		prompt?: string;
-		files?: string[];
-		runId?: string;
-	};
-	exitCode?: number;
-	usage?: string;
-}
+import type { ParsedCli } from "./types.js";
+
+export type { ParsedCli } from "./types.js";
 
 const USAGE = `usage: kce <command> [options]
 

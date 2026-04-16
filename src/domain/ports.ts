@@ -20,5 +20,5 @@ export interface ProviderAdapter {
 }
 
 export interface EmbeddingAdapter {
-	embed(texts: string[]): Promise<number[][]>;
+	embed(texts: string[], options?: { signal?: AbortSignal | undefined }): Promise<number[][]>;
 }

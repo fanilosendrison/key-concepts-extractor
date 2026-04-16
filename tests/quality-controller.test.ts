@@ -52,7 +52,9 @@ describe("QualityController", () => {
 		expect(result.report.corrections).toHaveLength(1);
 		expect(result.report.corrections[0]?.error_type).toBe("abusive_merge");
 		expect(result.report.corrections[0]?.suggested_split).toEqual(["consistency", "reliability"]);
-		expect(result.correctedList.map((c) => c.term).sort()).toEqual(["consistency", "reliability"]);
+		// NIB-M-QC §4.4 line 189-191 : split concepts built from `suggested_split`
+		// with `term` and `variants` overridden in the array order provided by the LLM.
+		expect(result.correctedList.map((c) => c.term)).toEqual(["consistency", "reliability"]);
 	});
 
 	it("T-QC-03: contested → R3 resolves as corrected → 3 rounds", async () => {
