@@ -278,6 +278,16 @@ export function getTerm(c: ControllableConcept): string {
 // angle_provenance / angles_count / justifications were recorded about the
 // merged cluster and do not apply to each split piece. Set derived_from so
 // downstream (diagnostics, coverage) can treat synthetic concepts honestly.
+//
+// NOTE on the "1/3" / "1/5" placeholders: Consensus and AnglesCount are
+// closed enum types with no "unknown" or "derived" value. A split concept
+// has no real provenance (found_by_models is empty), so any placeholder is
+// technically a lie — we pick the weakest closed value and rely on
+// `derived_from !== undefined` as the true signal. Consumers reading
+// consensus/angles_count on derived concepts should defer to derived_from
+// (see coverage-verifier.isFragile, diagnostics.ts empty-array guards).
+// Widening the enums to carry a "derived" marker is a larger refactor —
+// deferred until a reader genuinely needs per-provenance branching.
 export function withTerm<T extends ControllableConcept>(concept: T, term: string): T {
 	if ("term" in concept) {
 		const out: MergedConcept = {

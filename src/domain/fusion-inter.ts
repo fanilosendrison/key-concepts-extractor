@@ -147,7 +147,23 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 
 		const anglesCount = deriveAnglesCount(Object.keys(angleProv).length);
 
-		return {
+		// Propagate derivation: the FinalConcept is derived iff every cluster
+		// member is itself derived. A single non-derived member means the
+		// concept was grounded by a real extraction from at least one angle —
+		// the derived pieces are subsumed by that real attribution.
+		// Re-merge idempotency: when a future extraction pass re-clusters a
+		// derived concept with a genuinely-extracted one (same term from
+		// another angle), allDerived becomes false and derived_from is
+		// dropped — the real extraction absorbs the synthetic one. This is
+		// the desired behavior: once grounded by real provenance, the concept
+		// is no longer synthetic. Heterogeneous derived_from values across
+		// members (splits from different parents) are also collapsed: only
+		// the first parent's identity is kept, which is acceptable because
+		// the cluster merge already unified them into one canonical term.
+		const allDerived = cluster.members.every((m) => m.concept.derived_from !== undefined);
+		const derivedFrom = allDerived ? cluster.members[0]?.concept.derived_from : undefined;
+
+		const final: FinalConcept = {
 			canonical_term: canonical,
 			variants,
 			category,
@@ -157,5 +173,7 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 			angles_count: anglesCount,
 			justifications,
 		};
+		if (derivedFrom !== undefined) final.derived_from = derivedFrom;
+		return final;
 	});
 }
