@@ -57,9 +57,11 @@ function generateRunId(): string {
 
 async function writeJson(path: string, value: unknown): Promise<void> {
 	// Atomic write: a concurrent reader (listRuns, updateManifest) must never
-	// see a partial JSON. Write to a per-pid temp then rename — rename is atomic
-	// on POSIX filesystems for paths on the same device.
-	const tmp = `${path}.tmp.${process.pid}.${Date.now()}`;
+	// see a partial JSON. Write to a unique temp then rename — rename is atomic
+	// on POSIX filesystems for paths on the same device. The randomBytes suffix
+	// prevents tmp-path collision when two writeJson calls land in the same
+	// millisecond (T-WS-04 race: pipeline manifest update vs DELETE stopRun).
+	const tmp = `${path}.tmp.${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}`;
 	await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
 	await rename(tmp, path);
 }
