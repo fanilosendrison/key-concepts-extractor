@@ -8,6 +8,10 @@ export interface ProviderAdapterConfig {
 }
 
 export const TIMEOUT_MS = 600_000;
+// Embeddings are a single fast call (1-3s typical for batches up to 100
+// texts, which is the per-request cap set by DC-OPENAI-EMBEDDINGS §5).
+// 60s covers worst-case congestion without hiding a hang — 600s would.
+export const TIMEOUT_MS_EMBEDDING = 60_000;
 export const MAX_RETRIES = 3;
 export const BACKOFF_MS = [5000, 15000, 45000] as const;
 // Total wallclock ceiling per call. Retries exist to recover from transient
@@ -15,6 +19,8 @@ export const BACKOFF_MS = [5000, 15000, 45000] as const;
 // model is too slow and further retries waste wallclock. Caps worst case
 // from 41 min (4 × TIMEOUT + backoff) to ~20 min.
 export const MAX_TOTAL_DURATION_MS = TIMEOUT_MS * 2;
+// Same 2× invariant, scaled to the embedding profile.
+export const MAX_TOTAL_DURATION_MS_EMBEDDING = TIMEOUT_MS_EMBEDDING * 2;
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -35,9 +41,11 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 // Compose a per-attempt timeout with an external caller-provided signal.
-// Both cancel the fetch — whichever fires first.
-export function composeSignal(external?: AbortSignal): AbortSignal {
-	const timeout = AbortSignal.timeout(TIMEOUT_MS);
+// Both cancel the fetch — whichever fires first. `timeoutMs` allows callers
+// with different latency profiles (embeddings vs. generative LLMs) to pick
+// a bound proportional to expected duration rather than inheriting 600s.
+export function composeSignal(external?: AbortSignal, timeoutMs: number = TIMEOUT_MS): AbortSignal {
+	const timeout = AbortSignal.timeout(timeoutMs);
 	return external ? AbortSignal.any([timeout, external]) : timeout;
 }
 
@@ -56,13 +64,27 @@ function isAbortError(err: unknown): boolean {
 	return err.name === "AbortError" || err.name === "TimeoutError";
 }
 
+export interface RunWithRetryOptions {
+	signal?: AbortSignal | undefined;
+	// Override of the total wallclock budget — test-only. Production uses the default.
+	maxTotalDurationMs?: number | undefined;
+}
+
 export async function runWithRetry(
 	provider: ProviderLongId,
 	callOnce: () => Promise<string>,
-	signal?: AbortSignal,
-	// Override of the total wallclock budget — test-only. Production uses the default.
-	maxTotalDurationMs: number = MAX_TOTAL_DURATION_MS,
+	options: RunWithRetryOptions = {},
 ): Promise<{ content: string; latencyMs: number }> {
+	const { signal } = options;
+	const maxTotalDurationMs = options.maxTotalDurationMs ?? MAX_TOTAL_DURATION_MS;
+	// Reject NaN / Infinity / negative up front — silently clamping would hide
+	// configuration bugs and produce nonsense messages downstream. Fatal because
+	// it's a programmer error: no retry will un-break a bad config value.
+	if (!Number.isFinite(maxTotalDurationMs) || maxTotalDurationMs < 0) {
+		throw new FatalLLMError(
+			`runWithRetry: maxTotalDurationMs must be a non-negative finite number, got ${maxTotalDurationMs}`,
+		);
+	}
 	let lastError: unknown;
 	const startedAt = Date.now();
 	// The budget only gates retries (attempt > 0). The first attempt always

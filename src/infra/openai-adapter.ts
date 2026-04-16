@@ -56,7 +56,7 @@ export function createOpenAIAdapter(config: ProviderAdapterConfig): ProviderAdap
 					}
 					return choice.message.content;
 				},
-				request.signal,
+				{ signal: request.signal },
 			);
 			return {
 				content,

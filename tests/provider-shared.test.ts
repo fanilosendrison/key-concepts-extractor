@@ -47,7 +47,9 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			};
 			// Abort shortly after the first failure, while sleep(5000) is waiting.
 			setTimeout(() => ac.abort(new Error("user cancel")), 20);
-			await expect(runWithRetry("anthropic", callOnce, ac.signal)).rejects.toThrow("user cancel");
+			await expect(runWithRetry("anthropic", callOnce, { signal: ac.signal })).rejects.toThrow(
+				"user cancel",
+			);
 			expect(calls).toBe(1);
 		});
 
@@ -59,7 +61,9 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 				calls += 1;
 				return '"ok"';
 			};
-			await expect(runWithRetry("openai", callOnce, ac.signal)).rejects.toThrow("before-start");
+			await expect(runWithRetry("openai", callOnce, { signal: ac.signal })).rejects.toThrow(
+				"before-start",
+			);
 			expect(calls).toBe(0);
 		});
 
@@ -73,7 +77,7 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 				calls += 1;
 				throw new TransientLLMError("fail");
 			};
-			await expect(runWithRetry("anthropic", callOnce, undefined, 0)).rejects.toThrow(
+			await expect(runWithRetry("anthropic", callOnce, { maxTotalDurationMs: 0 })).rejects.toThrow(
 				/exceeded total wallclock budget/,
 			);
 			expect(calls).toBe(1);
@@ -88,10 +92,28 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 				calls += 1;
 				throw new TransientLLMError("fail");
 			};
-			await expect(runWithRetry("anthropic", callOnce, undefined, 10 * 60_000)).rejects.toThrow(
-				/failed after \d+ retries/,
-			);
+			await expect(
+				runWithRetry("anthropic", callOnce, { maxTotalDurationMs: 10 * 60_000 }),
+			).rejects.toThrow(/failed after \d+ retries/);
 			expect(calls).toBe(4);
 		}, 90_000); // allow the 5s+15s+45s real backoff sequence
+
+		it("T-PS-09: rejects NaN / negative / ±Infinity budgets up front, before any call", async () => {
+			// "Up front" = callOnce is NEVER invoked for an invalid budget. This
+			// locks the contract — if the validation ever migrates past attempt 1,
+			// `calls > 0` would break this test.
+			const bads = [Number.NaN, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+			for (const bad of bads) {
+				let calls = 0;
+				const callOnce = async () => {
+					calls += 1;
+					return '"ok"';
+				};
+				await expect(
+					runWithRetry("anthropic", callOnce, { maxTotalDurationMs: bad }),
+				).rejects.toThrow(/must be a non-negative finite number/);
+				expect(calls).toBe(0);
+			}
+		});
 	});
 });

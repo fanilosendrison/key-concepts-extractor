@@ -75,7 +75,9 @@ export async function runCommand(
 			signal: ctrl.signal,
 			source: "cli",
 		});
-		console.log(`Run ${result.runId} — ${result.status}`);
+		// Terminal status (completed/failed/stopped) reaches stdout via the
+		// `run_complete` / `run_error` / `run_stopped` events published by the
+		// pipeline and printed by the subscriber above. No duplicate human line.
 		// NIB-M-CLI §2.1: 0=success, 130=user interruption (Ctrl+C), 1=fatal.
 		if (result.status === "completed") return 0;
 		if (result.status === "stopped") return 130;

@@ -62,7 +62,7 @@ export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderA
 					}
 					return stripJsonFence(textBlock.text);
 				},
-				request.signal,
+				{ signal: request.signal },
 			);
 			return {
 				content,

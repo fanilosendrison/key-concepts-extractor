@@ -59,7 +59,7 @@ export function createGoogleAdapter(config: ProviderAdapterConfig): ProviderAdap
 					const contentParts = candidate.content.parts.filter((p) => !p.thought);
 					return contentParts.map((p) => p.text).join("");
 				},
-				request.signal,
+				{ signal: request.signal },
 			);
 			return {
 				content,
