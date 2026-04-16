@@ -38,7 +38,12 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2([
-				{ target: "consistency / reliability", verdict: "confirmed", justification: "agree" },
+				{
+					target: "consistency / reliability",
+					claude_error_type: "abusive_merge",
+					verdict: "confirmed",
+					justification: "agree",
+				},
 			]),
 		]);
 		const result = await runQualityControl({
@@ -70,7 +75,12 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2([
-				{ target: "temperature", verdict: "contested", justification: "is a constraint" },
+				{
+					target: "temperature",
+					claude_error_type: "incorrect_categorization",
+					verdict: "contested",
+					justification: "is a constraint",
+				},
 			]),
 		]);
 		const result = await runQualityControl({
@@ -98,7 +108,14 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2(
-				[{ target: "consistency", verdict: "confirmed", justification: "agree" }],
+				[
+					{
+						target: "consistency",
+						claude_error_type: "abusive_merge",
+						verdict: "confirmed",
+						justification: "agree",
+					},
+				],
 				[
 					{
 						target: "caching",
@@ -118,6 +135,49 @@ describe("QualityController", () => {
 		expect(result.report.review_rounds).toBe(3);
 		const targets = result.report.corrections.map((c) => c.target);
 		expect(targets).toContain("caching");
+	});
+
+	it("T-QC-MINIMAL: parser accepts bare-minimum LLM JSON (spec-mandated extras omitted)", async () => {
+		// Bypass the helpers on purpose: validate parser tolerance against an LLM
+		// that omits every spec-optional field across all 3 rounds. R2 contests
+		// so R3 is actually consumed — otherwise R3's bare-minimum shape would
+		// be untested and the parser tolerance on R3 would only appear covered.
+		const r1Bare = JSON.stringify({
+			errors_found: [
+				{
+					target: "consistency / reliability",
+					error_type: "abusive_merge",
+					suggested_split: ["consistency", "reliability"],
+				},
+			],
+		});
+		const r2Bare = JSON.stringify({
+			reviews_of_claude: [{ target: "consistency / reliability", verdict: "contested" }],
+			// claude_error_type intentionally omitted to exercise parser tolerance
+			// on the spec-mandated field — the production Zod schema treats it as
+			// optional, so a minimal LLM response must still parse.
+		});
+		const r3Bare = JSON.stringify({
+			final_decisions: [
+				{
+					target: "consistency / reliability",
+					decision: "corrected",
+					suggested_split: ["consistency", "reliability"],
+				},
+			],
+		});
+		const anthropic = createMockProvider("anthropic", [r1Bare, r3Bare]);
+		const openai = createMockProvider("openai", [r2Bare]);
+		const result = await runQualityControl({
+			mergedList: [mc("consistency / reliability")],
+			context: "source",
+			scope: "angle:etats_ideaux",
+			anthropic,
+			openai,
+		});
+		expect(result.report.review_rounds).toBe(3);
+		expect(anthropic.remaining).toBe(0);
+		expect(result.correctedList.map((c) => c.term).sort()).toEqual(["consistency", "reliability"]);
 	});
 
 	it("P-08: quality never decreases count", async () => {

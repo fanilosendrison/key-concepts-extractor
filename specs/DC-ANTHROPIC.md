@@ -2,7 +2,7 @@
 id: DC-ANTHROPIC
 type: dependency-contract
 version: "1.0.0"
-dependency_version: "2024-10-22 (API version header)"
+dependency_version: "2023-06-01 (API version header)"
 scope: anthropic-api
 status: approved
 validates: [src/infra/anthropic-adapter.ts, src/infra/provider-shared.ts, tests/contracts.test.ts]
@@ -16,7 +16,7 @@ superseded_by: []
 ## 0. Identity
 
 - **Component:** Anthropic Messages API
-- **Version:** API version `2024-10-22` (set via `anthropic-version` header)
+- **Version:** API version `2023-06-01` (set via `anthropic-version` header)
 - **Source:** `https://api.anthropic.com/v1/messages`
 - **Role:** Provider adapter for Claude (extraction + quality/relevance control rounds 1 & 3)
 
@@ -46,7 +46,7 @@ interface AnthropicRequest {
 
 // Headers
 // x-api-key: {apiKey}
-// anthropic-version: 2024-10-22
+// anthropic-version: 2023-06-01
 // content-type: application/json
 ```
 
@@ -121,7 +121,7 @@ const response = await fetch(endpoint + '/v1/messages', {
   method: 'POST',
   headers: {
     'x-api-key': config.apiKey,
-    'anthropic-version': '2024-10-22',
+    'anthropic-version': '2023-06-01',
     'content-type': 'application/json',
   },
   body: JSON.stringify({

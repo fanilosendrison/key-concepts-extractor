@@ -5,10 +5,7 @@ import { runCommand } from "./commands/run.js";
 import { showCommand } from "./commands/show.js";
 import type { ParsedCli } from "./types.js";
 
-export async function dispatch(
-	parsed: ParsedCli,
-	startup: ResolvedStartupConfig,
-): Promise<number> {
+export async function dispatch(parsed: ParsedCli, startup: ResolvedStartupConfig): Promise<number> {
 	switch (parsed.command) {
 		case "help":
 			if (parsed.usage) console.log(parsed.usage);

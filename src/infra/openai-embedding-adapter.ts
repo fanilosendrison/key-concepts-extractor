@@ -13,9 +13,7 @@ interface EmbeddingResponse {
 	data: Array<{ embedding: number[]; index: number }>;
 }
 
-export function createOpenAIEmbeddingAdapter(
-	cfg: OpenAIEmbeddingAdapterConfig,
-): EmbeddingAdapter {
+export function createOpenAIEmbeddingAdapter(cfg: OpenAIEmbeddingAdapterConfig): EmbeddingAdapter {
 	const endpoint = cfg.endpoint ?? DEFAULT_ENDPOINT;
 	return {
 		async embed(texts, options) {

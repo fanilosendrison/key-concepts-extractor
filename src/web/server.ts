@@ -22,7 +22,7 @@ export interface WebServerDeps {
 	config?: RunConfig;
 }
 
-export interface WebServerHandle {
+export interface ListeningServer {
 	readonly port: number;
 	readonly url: string;
 	stop(): Promise<void>;
@@ -30,7 +30,7 @@ export interface WebServerHandle {
 
 export interface WebServer {
 	fetch: (req: Request) => Promise<Response>;
-	listen(port?: number): Promise<WebServerHandle>;
+	listen(port?: number): Promise<ListeningServer>;
 	// Resolves when no background run is in flight. Used by tests to avoid
 	// tearing down the temp run directory while the pipeline is still writing.
 	waitForIdle(): Promise<void>;
@@ -146,7 +146,14 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 						try {
 							ws.send(JSON.stringify(event));
 						} catch {
-							// WS already closed; will be cleaned up via onClose
+							// Half-closed socket (e.g. TCP reset without close frame) may never
+							// fire onClose — release the subscription proactively to avoid leaking
+							// listeners in the event-logger for the remainder of the process.
+							const u = wsUnsubs.get(ws);
+							if (u) {
+								u();
+								wsUnsubs.delete(ws);
+							}
 						}
 					};
 					const unsub = logger.subscribe(listener);

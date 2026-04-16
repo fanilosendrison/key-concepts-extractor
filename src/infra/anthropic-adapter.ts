@@ -7,7 +7,15 @@ import {
 } from "./provider-shared.js";
 
 const DEFAULT_ENDPOINT = "https://api.anthropic.com";
-const API_VERSION = "2024-10-22";
+const API_VERSION = "2023-06-01";
+
+// Claude with extended thinking often wraps JSON in ```json ... ``` fences
+// despite explicit "no markdown" system instructions. Strip them defensively.
+const FENCE_RE = /^\s*```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/;
+function stripJsonFence(text: string): string {
+	const m = text.match(FENCE_RE);
+	return m?.[1] !== undefined ? m[1] : text;
+}
 
 interface AnthropicTextBlock {
 	type: "text";
@@ -52,7 +60,7 @@ export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderA
 					if (!textBlock) {
 						throw new Error("No text block in Anthropic response");
 					}
-					return textBlock.text;
+					return stripJsonFence(textBlock.text);
 				},
 				request.signal,
 			);

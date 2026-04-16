@@ -207,13 +207,21 @@ function applyCorrections(list, corrections): typeof list {
 }
 ```
 
-**Inheritance rule for splits** : a concept resulting from `splitCluster` inherits from the target :
+**Inheritance rule for splits** : a concept resulting from `splitCluster` inherits from the target only the fields that still hold after splitting :
 - `category`
 - `granularity` (when present, i.e. for `FinalConcept`)
 - `explicit_in_source`
-- `justifications`
 
-Only `term` and `variants` are overridden from `suggested_split`. Other fields follow the domain type (e.g. `found_by_models`, `consensus`, `angle_provenance`) are inherited as-is.
+All provenance fields MUST be reset, because they were recorded about the merged cluster and no longer describe the split pieces :
+- `found_by_models` → `[]` (MergedConcept)
+- `consensus` → `"1/3"` (MergedConcept, lowest closed value)
+- `angle_provenance` → `{}` (FinalConcept)
+- `angles_count` → `"1/5"` (FinalConcept, lowest closed value)
+- `justifications` → `[]` (both)
+
+`term` and `variants` are overridden from `suggested_split`. Every split concept MUST set `derived_from` to the parent's term/canonical_term so downstream modules can distinguish synthetic concepts from directly-extracted ones (e.g. `coverage-verifier.isFragile` treats any `derived_from` concept as fragile unless found explicit in the source text).
+
+Rationale : inheriting provenance as-is would inflate diagnostics counts (a "3/3 unanimous" cluster would spawn N "3/3 unanimous" splits with identical justifications attributed to the merged concept, not each piece) and lie about which model/angle actually supported each split. The reset + `derived_from` flag keeps the audit trail honest while preserving the link back to the parent for traceability.
 
 **Schema validation** : before applying a correction with `error_type === "abusive_merge"`, the controller MUST validate that `suggested_split` is a non-empty array with at least 2 distinct strings, none of which equals `target`. On validation failure → **fail-closed** : raise a schema violation error, do not apply any subsequent correction, run status = `failed`. See §6.
 
