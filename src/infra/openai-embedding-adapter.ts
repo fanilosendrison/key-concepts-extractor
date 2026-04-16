@@ -1,7 +1,9 @@
+import { FatalLLMError } from "../domain/errors.js";
 import type { EmbeddingAdapter } from "../domain/ports.js";
 import {
 	classifyHttp,
 	composeSignal,
+	MAX_OPERATION_DURATION_MS_EMBEDDING,
 	MAX_TOTAL_DURATION_MS_EMBEDDING,
 	runWithRetry,
 	TIMEOUT_MS_EMBEDDING,
@@ -60,12 +62,18 @@ export function createOpenAIEmbeddingAdapter(cfg: OpenAIEmbeddingAdapterConfig):
 			// [] is the neutral answer our consumer (fusion-inter) expects when no
 			// concepts were extracted — no point paying a round-trip to learn that.
 			if (texts.length === 0) return [];
-			// Sequential on purpose: the external signal (and each batch's own
-			// wallclock budget) bounds wait time. No cumulative budget across
-			// batches — the nominal use case is 1-2 batches (100-200 concepts per
-			// NIB-M-FUSION-INTER); multi-thousand inputs would need revisiting.
+			// Sequential, with a cumulative wallclock ceiling across all batches.
+			// Per-batch budget still applies; this cap catches a runaway multi-
+			// batch call (e.g. thousands of concepts + congestion) without relying
+			// solely on the caller's abort signal.
 			const all: number[][] = [];
+			const startedAt = Date.now();
 			for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
+				if (i > 0 && Date.now() - startedAt >= MAX_OPERATION_DURATION_MS_EMBEDDING) {
+					throw new FatalLLMError(
+						`openai-embedding: operation exceeded ${MAX_OPERATION_DURATION_MS_EMBEDDING}ms wallclock after ${i} of ${texts.length} inputs`,
+					);
+				}
 				const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE);
 				const vectors = await embedBatch(batch, options?.signal);
 				all.push(...vectors);

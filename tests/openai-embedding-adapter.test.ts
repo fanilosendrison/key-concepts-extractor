@@ -146,6 +146,39 @@ describe("createOpenAIEmbeddingAdapter (DC-OPENAI-EMBEDDINGS)", () => {
 		expect(out).toEqual([[0.1], [0.5], [0.9]]);
 	});
 
+	it("T-EMB-08: aborts operation when cumulative wallclock exceeds ceiling", async () => {
+		// Ceiling = 5 × per-batch budget = 600s. Mock fetch "takes" 120s of
+		// simulated wallclock per batch by advancing Date.now(), so batch 6
+		// (starting at elapsed=600_000) must trip the ceiling BEFORE the call.
+		let simulatedNow = 0;
+		const spy = vi.spyOn(Date, "now").mockImplementation(() => simulatedNow);
+		globalThis.fetch = vi.fn(async (_url, init) => {
+			simulatedNow += 120_000;
+			const body = JSON.parse((init as RequestInit).body as string);
+			const items = (body.input as string[]).map((_t, idx) => ({
+				index: idx,
+				embedding: [idx],
+			}));
+			return new Response(JSON.stringify({ data: items }), { status: 200 });
+		}) as typeof fetch;
+
+		try {
+			const adapter = createOpenAIEmbeddingAdapter({
+				apiKey: "sk-test",
+				model: "text-embedding-3-small",
+			});
+			// 1000 inputs → up to 10 batches. Expected trip at batch 6.
+			const inputs = Array.from({ length: 1000 }, (_, i) => `t${i}`);
+			await expect(adapter.embed(inputs)).rejects.toThrow(
+				/operation exceeded 600000ms wallclock after 500 of 1000 inputs/,
+			);
+			// 5 batches completed before the 6th was rejected at the guard.
+			expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
 	it("T-EMB-03: aborts in-flight request when caller signal aborts", async () => {
 		const adapter = createOpenAIEmbeddingAdapter({
 			apiKey: "sk-test",

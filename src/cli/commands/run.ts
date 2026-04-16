@@ -1,7 +1,6 @@
 // NIB-M-CLI §2.1 — `kce run --prompt "..." --files <path> ...`
 
 import { join } from "node:path";
-import type { PipelineEvent } from "../../domain/types.js";
 import { createAnthropicAdapter } from "../../infra/anthropic-adapter.js";
 import type { ResolvedStartupConfig } from "../../infra/config-loader.js";
 import { createEventLogger } from "../../infra/event-logger.js";
@@ -12,16 +11,11 @@ import { createOpenAIEmbeddingAdapter } from "../../infra/openai-embedding-adapt
 import { acquireRunLock } from "../../infra/run-lock.js";
 import { createRunManager } from "../../infra/run-manager.js";
 import { runPipeline } from "../../pipeline.js";
+import { formatEvent } from "../format-event.js";
 
 export interface RunCommandArgs {
 	prompt?: string;
 	files?: string[];
-}
-
-// NIB-M-CLI §3.3 + §5 : one line per event, horodated, structured stdout.
-function formatEvent(event: PipelineEvent): string {
-	const time = event.timestamp.slice(11, 23);
-	return `[${time}] ${event.phase} — ${event.type} ${JSON.stringify(event.payload)}`;
 }
 
 export async function runCommand(

@@ -18,6 +18,23 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			// Only assertion we can make without waiting TIMEOUT_MS : it's an AbortSignal.
 			expect(composed).toBeInstanceOf(AbortSignal);
 		});
+
+		it("T-PS-10: rejects NaN / ≤0 / ±Infinity / non-integer timeoutMs", () => {
+			// AbortSignal.timeout(0) fires immediately and floats get truncated
+			// via ToUint32 — 0.5 would silently become 0. Guard all invalid shapes.
+			const bads = [
+				Number.NaN,
+				0,
+				-1,
+				Number.POSITIVE_INFINITY,
+				Number.NEGATIVE_INFINITY,
+				0.5,
+				1.9,
+			];
+			for (const bad of bads) {
+				expect(() => composeSignal(undefined, bad)).toThrow(/must be a positive integer/);
+			}
+		});
 	});
 
 	describe("sleep", () => {

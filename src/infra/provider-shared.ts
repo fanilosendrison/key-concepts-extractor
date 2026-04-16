@@ -21,6 +21,12 @@ export const BACKOFF_MS = [5000, 15000, 45000] as const;
 export const MAX_TOTAL_DURATION_MS = TIMEOUT_MS * 2;
 // Same 2× invariant, scaled to the embedding profile.
 export const MAX_TOTAL_DURATION_MS_EMBEDDING = TIMEOUT_MS_EMBEDDING * 2;
+// Global ceiling for a full multi-batch `embed()` operation. Per-batch budget
+// still applies; this protects against a runaway (thousands of concepts) where
+// each batch could legitimately consume its full 120s. 5× per-batch budget =
+// 600s total, which covers ~5 batches under worst-case congestion or hundreds
+// of batches at nominal 1-3s each.
+export const MAX_OPERATION_DURATION_MS_EMBEDDING = MAX_TOTAL_DURATION_MS_EMBEDDING * 5;
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -45,6 +51,14 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // with different latency profiles (embeddings vs. generative LLMs) to pick
 // a bound proportional to expected duration rather than inheriting 600s.
 export function composeSignal(external?: AbortSignal, timeoutMs: number = TIMEOUT_MS): AbortSignal {
+	// Reject NaN / Infinity / non-positive / non-integer. AbortSignal.timeout
+	// truncates floats via ToUint32, so 0.5 silently becomes 0 (already-aborted).
+	// Fatal because it's a programmer error; retry cannot un-break a bad config.
+	if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+		throw new FatalLLMError(
+			`composeSignal: timeoutMs must be a positive integer, got ${timeoutMs}`,
+		);
+	}
 	const timeout = AbortSignal.timeout(timeoutMs);
 	return external ? AbortSignal.any([timeout, external]) : timeout;
 }

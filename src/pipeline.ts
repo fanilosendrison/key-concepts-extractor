@@ -76,15 +76,25 @@ export async function runPipeline(
 	};
 
 	// Terminal events must reach subscribers before the CLI process exits.
-	// Swallowed on I/O failure so a failed flush can't shadow the run result.
+	// A failed flush can't shadow the run result, but we MUST surface the
+	// failure on stderr — otherwise a logger I/O error (disk full, fd leak)
+	// would leave the CLI exiting silently with a non-zero code and no
+	// message. The persisted run state is authoritative; stderr is the
+	// fallback channel when the subscriber path is broken.
 	const emitTerminal = async (
 		type: TerminalEventType,
 		payload: Record<string, unknown>,
 	): Promise<void> => {
 		try {
 			await logger.emit({ phase: "run", type, payload });
-		} catch {
-			// best-effort — the persisted run state is authoritative.
+		} catch (err) {
+			// logger.emit persists to events.jsonl THEN dispatches to subscribers.
+			// Reaching the catch means persistence failed — the JSONL line is
+			// lost AND the subscriber path never fired. Flag both clearly.
+			const msg = err instanceof Error ? err.message : String(err);
+			console.error(
+				`[emit-terminal] event persistence failed for ${type} (subscribers not notified): ${msg}`,
+			);
 		}
 	};
 

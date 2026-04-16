@@ -2,7 +2,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { RunManifest } from "../../domain/types.js";
+import type { PipelineEvent, RunManifest } from "../../domain/types.js";
+import { formatEvent } from "../format-event.js";
 
 export async function showCommand(runId: string, baseDir: string): Promise<number> {
 	const runDir = join(baseDir, "runs", runId);
@@ -22,8 +23,8 @@ export async function showCommand(runId: string, baseDir: string): Promise<numbe
 	if (existsSync(eventsPath)) {
 		const raw = await readFile(eventsPath, "utf-8");
 		for (const line of raw.split("\n").filter(Boolean)) {
-			const ev = JSON.parse(line) as { timestamp: string; type: string };
-			console.log(`[${ev.timestamp.slice(11, 23)}] ${ev.type}`);
+			const ev = JSON.parse(line) as PipelineEvent;
+			console.log(formatEvent(ev));
 		}
 	} else {
 		console.log("(no events.jsonl)");
