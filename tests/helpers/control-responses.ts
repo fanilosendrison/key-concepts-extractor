@@ -52,20 +52,21 @@ export function qualityR1(errors: QualityR1Error[], noErrorCount = 0): string {
 }
 
 // NIB-M-LLM-PAYLOADS Type 3 `reviews_of_claude[]`.
-// `claude_error_type` echoes the error_type Claude flagged in R1; when the
-// caller doesn't pass it, we default to "abusive_merge" which is the most
-// common error in tests — override for scenarios reviewing other error types.
+// `claude_error_type` is required (echoes the error_type Claude flagged in
+// R1). A default would lie in scenarios reviewing incorrect_categorization
+// or justification_incoherence, so the caller must always supply it — when
+// the controller grows a cross-check against R1, mocks stay honest.
 export interface QualityR2Review {
 	target: string;
 	verdict: "confirmed" | "contested";
 	justification: string;
-	claude_error_type?: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
+	claude_error_type: "abusive_merge" | "incorrect_categorization" | "justification_incoherence";
 }
 
 function fullR2Review(r: QualityR2Review): Record<string, unknown> {
 	return {
 		target: r.target,
-		claude_error_type: r.claude_error_type ?? "abusive_merge",
+		claude_error_type: r.claude_error_type,
 		verdict: r.verdict,
 		justification: r.justification,
 	};

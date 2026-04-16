@@ -38,7 +38,12 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2([
-				{ target: "consistency / reliability", verdict: "confirmed", justification: "agree" },
+				{
+					target: "consistency / reliability",
+					claude_error_type: "abusive_merge",
+					verdict: "confirmed",
+					justification: "agree",
+				},
 			]),
 		]);
 		const result = await runQualityControl({
@@ -70,7 +75,12 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2([
-				{ target: "temperature", verdict: "contested", justification: "is a constraint" },
+				{
+					target: "temperature",
+					claude_error_type: "incorrect_categorization",
+					verdict: "contested",
+					justification: "is a constraint",
+				},
 			]),
 		]);
 		const result = await runQualityControl({
@@ -98,7 +108,14 @@ describe("QualityController", () => {
 		]);
 		const openai = createMockProvider("openai", [
 			qualityR2(
-				[{ target: "consistency", verdict: "confirmed", justification: "agree" }],
+				[
+					{
+						target: "consistency",
+						claude_error_type: "abusive_merge",
+						verdict: "confirmed",
+						justification: "agree",
+					},
+				],
 				[
 					{
 						target: "caching",
@@ -136,6 +153,9 @@ describe("QualityController", () => {
 		});
 		const r2Bare = JSON.stringify({
 			reviews_of_claude: [{ target: "consistency / reliability", verdict: "contested" }],
+			// claude_error_type intentionally omitted to exercise parser tolerance
+			// on the spec-mandated field — the production Zod schema treats it as
+			// optional, so a minimal LLM response must still parse.
 		});
 		const r3Bare = JSON.stringify({
 			final_decisions: [

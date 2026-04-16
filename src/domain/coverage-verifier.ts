@@ -21,6 +21,13 @@ function escapeRegex(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Cache compiled regex per NFC-normalized term. verifyCoverage runs N concepts
+// × M variants regex compilations per invocation; the Unicode moteur is
+// noticeably slower than ASCII, so memoizing by term pays off on larger runs.
+// Map is module-scoped — fine for a single-process CLI, never grows unbounded
+// beyond the set of distinct terms extracted across runs in the same process.
+const patternCache = new Map<string, RegExp>();
+
 // Unicode-aware word boundary.
 // Two gotchas the naive fix missed: (1) NFD decomposition — "café" stored
 // as "cafe" + U+0301 would match "cafe" inside because U+0301 (\p{M}) was
@@ -38,10 +45,14 @@ function escapeRegex(s: string): string {
 function checkExplicit(term: string, sourceText: string): boolean {
 	const trimmed = term.trim().normalize("NFC");
 	if (trimmed.length === 0) return false;
-	const pattern = new RegExp(
-		`(?<![\\p{L}\\p{N}\\p{M}\\p{Pc}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}\\p{M}\\p{Pc}])`,
-		"iu",
-	);
+	let pattern = patternCache.get(trimmed);
+	if (pattern === undefined) {
+		pattern = new RegExp(
+			`(?<![\\p{L}\\p{N}\\p{M}\\p{Pc}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}\\p{M}\\p{Pc}])`,
+			"iu",
+		);
+		patternCache.set(trimmed, pattern);
+	}
 	return pattern.test(sourceText.normalize("NFC"));
 }
 
