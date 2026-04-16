@@ -22,7 +22,7 @@ export interface WebServerDeps {
 	config?: RunConfig;
 }
 
-export interface WebServerHandle {
+export interface ListeningServer {
 	readonly port: number;
 	readonly url: string;
 	stop(): Promise<void>;
@@ -30,7 +30,7 @@ export interface WebServerHandle {
 
 export interface WebServer {
 	fetch: (req: Request) => Promise<Response>;
-	listen(port?: number): Promise<WebServerHandle>;
+	listen(port?: number): Promise<ListeningServer>;
 	// Resolves when no background run is in flight. Used by tests to avoid
 	// tearing down the temp run directory while the pipeline is still writing.
 	waitForIdle(): Promise<void>;

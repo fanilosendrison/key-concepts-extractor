@@ -134,6 +134,24 @@ describe("RunManager", () => {
 		expect(found?.input_files).toEqual([]);
 	});
 
+	it("T-RM-DIAG-WARN: persistDiagnostics without prior persistInterAngle writes diagnostics.json and warns", async () => {
+		const rm = createRunManager(baseDir);
+		await rm.initRun(DEFAULT_RUN_CONFIG, "cli");
+		const report = {
+			unique_by_angle: {},
+			unique_by_model: {},
+			unanimous_concepts: 0,
+			total_after_inter_angle: 0,
+			fragile: 0,
+		};
+		await rm.persistDiagnostics(report);
+
+		expect(existsSync(join(rm.runDir, "diagnostics.json"))).toBe(true);
+		expect(existsSync(join(rm.runDir, "fusion-inter", "merged.json"))).toBe(false);
+		const written = JSON.parse(await readFile(join(rm.runDir, "diagnostics.json"), "utf-8"));
+		expect(written).toEqual(report);
+	});
+
 	it("P-05: isolation between runs", async () => {
 		const r1 = createRunManager(baseDir);
 		const r2 = createRunManager(baseDir);

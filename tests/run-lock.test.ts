@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { acquireRunLock } from "../src/infra/run-lock.js";
+import { acquireRunLock, RUN_IN_PROGRESS_MESSAGE } from "../src/infra/run-lock.js";
 import { cleanupTempDir, createTempDir } from "./helpers/temp-dir.js";
 
 describe("acquireRunLock (NIB-M-CLI §3.5, single concurrent run)", () => {
@@ -21,7 +21,7 @@ describe("acquireRunLock (NIB-M-CLI §3.5, single concurrent run)", () => {
 
 	it("T-LOCK-02: second acquire while first held throws", async () => {
 		const first = await acquireRunLock(dir);
-		await expect(acquireRunLock(dir)).rejects.toThrow(/already in progress|locked/i);
+		await expect(acquireRunLock(dir)).rejects.toThrow(RUN_IN_PROGRESS_MESSAGE);
 		await first.release();
 	});
 

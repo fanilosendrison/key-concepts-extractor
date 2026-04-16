@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LLMResponse, ProviderAdapter } from "../src/domain/ports.js";
 import { DEFAULT_RUN_CONFIG } from "../src/domain/types.js";
 import { createRunManager } from "../src/infra/run-manager.js";
-import { createWebServer, type WebServerDeps, type WebServerHandle } from "../src/web/server.js";
+import { createWebServer, type ListeningServer, type WebServerDeps } from "../src/web/server.js";
 import { createPipelineHarness } from "./helpers/pipeline-harness.js";
 import { cleanupTempDir, createTempDir } from "./helpers/temp-dir.js";
 
@@ -33,7 +33,7 @@ function makeSlowDeps(baseDir: string, delayMs = 200): WebServerDeps {
 
 describe("WebServer", () => {
 	let baseDir: string;
-	let handle: WebServerHandle | undefined;
+	let handle: ListeningServer | undefined;
 
 	beforeEach(async () => {
 		baseDir = await createTempDir();

@@ -21,12 +21,12 @@ function escapeRegex(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Word-boundary match: "AI" must not match "brain", "ML" must not match "MLLM".
-// \b is Unicode-aware enough for ASCII terms; spec §6 acknowledges mixed-script edge cases.
+// Unicode-aware word boundary: handles accented terms ("café", "naïve") and
+// NFD-composed characters that ASCII \b would miss.
 function checkExplicit(term: string, sourceText: string): boolean {
 	const trimmed = term.trim();
 	if (trimmed.length === 0) return false;
-	const pattern = new RegExp(`\\b${escapeRegex(trimmed)}\\b`, "i");
+	const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}])`, "iu");
 	return pattern.test(sourceText);
 }
 

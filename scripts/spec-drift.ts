@@ -11,7 +11,7 @@
 // Run:  node --experimental-strip-types scripts/spec-drift.ts [--show-missing]
 // Exit: 0 = no drift, 1 = drift detected.
 
-import { readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,11 +21,7 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(SCRIPT_DIR, "..");
 const SPECS_DIR = join(ROOT, "specs");
 const SRC_DIR = join(ROOT, "src");
-// Outside the repo to avoid leaving cruft on interruption (mitigation only:
-// .gitignore also excludes the legacy in-repo path).
-const TMP_FILE = join(tmpdir(), `spec-drift-check-${process.pid}.ts`);
 const SPEC_ONLY_MARKER = "// spec-only";
-const SHOW_MISSING = process.argv.includes("--show-missing");
 
 interface SpecBlock {
 	specFile: string;
@@ -35,7 +31,7 @@ interface SpecBlock {
 	prefix: string; // e.g. "B007_"
 }
 
-interface CheckedDecl {
+export interface CheckedDecl {
 	name: string;
 	specFile: string;
 	line: number;
@@ -45,7 +41,7 @@ interface CheckedDecl {
 	detail?: string;
 }
 
-interface MissingDecl {
+export interface MissingDecl {
 	name: string;
 	specFile: string;
 	line: number;
@@ -60,10 +56,10 @@ function walkTsFiles(dir: string, out: string[]): void {
 	}
 }
 
-function indexSrcExports(): Map<string, string> {
+function indexSrcExports(srcDir: string): Map<string, string> {
 	const map = new Map<string, string>();
 	const files: string[] = [];
-	walkTsFiles(SRC_DIR, files);
+	walkTsFiles(srcDir, files);
 	for (const file of files) {
 		const text = readFileSync(file, "utf8");
 		const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
@@ -82,8 +78,9 @@ function extractBlocks(specFile: string, blockCounter: { n: number }): SpecBlock
 	const blocks: SpecBlock[] = [];
 	// Tolerate trailing whitespace / CRLF / extra attributes after the language tag.
 	const blockRegex = /```(?:typescript|ts)[^\n]*\n([\s\S]*?)```/g;
-	let match: RegExpExecArray | null;
-	while ((match = blockRegex.exec(text)) !== null) {
+	while (true) {
+		const match = blockRegex.exec(text);
+		if (match === null) break;
 		const body = match[1];
 		if (body.includes(SPEC_ONLY_MARKER)) continue;
 		const lineNumber = text.slice(0, match.index).split("\n").length;
@@ -119,6 +116,7 @@ function renameAll(body: string, names: string[], prefix: string): string {
 function buildAssertionFile(
 	blocks: SpecBlock[],
 	srcMap: Map<string, string>,
+	tmpFile: string,
 ): { checked: CheckedDecl[]; missing: MissingDecl[] } {
 	const checked: CheckedDecl[] = [];
 	const missing: MissingDecl[] = [];
@@ -137,8 +135,8 @@ function buildAssertionFile(
 				missing.push({ name, specFile: block.specFile, line: block.line });
 				continue;
 			}
-			// Path resolved from TMP_FILE's directory, not ROOT.
-			const relPath = relative(dirname(TMP_FILE), srcFile).replace(/\\/g, "/");
+			// Path resolved from the tmp file's directory, not ROOT.
+			const relPath = relative(dirname(tmpFile), srcFile).replace(/\\/g, "/");
 			const rel = `${relPath.startsWith(".") ? "" : "./"}${relPath.replace(/\.ts$/, ".js")}`;
 			const actualAlias = `Actual_${block.prefix}${name}`;
 			const specAlias = `Spec_${block.prefix}${name}`;
@@ -158,12 +156,12 @@ function buildAssertionFile(
 	}
 
 	content += `${importLines.join("\n")}\n\n${declLines.join("\n")}`;
-	writeFileSync(TMP_FILE, content);
+	writeFileSync(tmpFile, content);
 	return { checked, missing };
 }
 
-function runTsc(): readonly ts.Diagnostic[] {
-	const program = ts.createProgram([TMP_FILE], {
+function runTsc(tmpFile: string): readonly ts.Diagnostic[] {
+	const program = ts.createProgram([tmpFile], {
 		noEmit: true,
 		strict: true,
 		target: ts.ScriptTarget.ES2022,
@@ -190,14 +188,19 @@ function classify(checked: CheckedDecl[], diags: readonly ts.Diagnostic[]): void
 	}
 }
 
-function printReport(checked: CheckedDecl[], missing: MissingDecl[]): number {
+function printReport(
+	checked: CheckedDecl[],
+	missing: MissingDecl[],
+	showMissing: boolean,
+	root: string,
+): number {
 	const drift = checked.filter((c) => c.status === "DRIFT");
 	const ok = checked.length - drift.length;
 
 	console.log(
-		`Spec drift report: ${ok} OK, ${drift.length} DRIFT${SHOW_MISSING ? `, ${missing.length} MISSING_IN_CODE` : ""}`,
+		`Spec drift report: ${ok} OK, ${drift.length} DRIFT${showMissing ? `, ${missing.length} MISSING_IN_CODE` : ""}`,
 	);
-	if (!SHOW_MISSING && missing.length > 0) {
+	if (!showMissing && missing.length > 0) {
 		console.log(`(${missing.length} spec-only types hidden — pass --show-missing to list)`);
 	}
 
@@ -205,7 +208,7 @@ function printReport(checked: CheckedDecl[], missing: MissingDecl[]): number {
 		console.log("\n=== DRIFT ===");
 		for (const c of drift) {
 			console.log(
-				`  ${c.name}  (${relative(ROOT, c.specFile)}:${c.line} <-> ${relative(ROOT, c.srcFile)})`,
+				`  ${c.name}  (${relative(root, c.specFile)}:${c.line} <-> ${relative(root, c.srcFile)})`,
 			);
 			if (c.detail) {
 				const lines = c.detail.split("\n").slice(0, 8);
@@ -214,33 +217,54 @@ function printReport(checked: CheckedDecl[], missing: MissingDecl[]): number {
 		}
 	}
 
-	if (SHOW_MISSING && missing.length > 0) {
+	if (showMissing && missing.length > 0) {
 		console.log("\n=== MISSING IN CODE (informational) ===");
 		for (const m of missing) {
-			console.log(`  ${m.name}  (${relative(ROOT, m.specFile)}:${m.line})`);
+			console.log(`  ${m.name}  (${relative(root, m.specFile)}:${m.line})`);
 		}
 	}
 
 	return drift.length > 0 ? 1 : 0;
 }
 
-function main(): void {
-	const srcMap = indexSrcExports();
+export interface DriftCheckOptions {
+	specsDir: string;
+	srcDir: string;
+	tmpFile?: string;
+}
+
+export interface DriftCheckResult {
+	checked: CheckedDecl[];
+	missing: MissingDecl[];
+}
+
+export function runDriftCheck(opts: DriftCheckOptions): DriftCheckResult {
+	const tmpFile = opts.tmpFile ?? join(tmpdir(), `spec-drift-check-${process.pid}.ts`);
+	const srcMap = indexSrcExports(opts.srcDir);
 	const blocks: SpecBlock[] = [];
 	const counter = { n: 0 };
-	for (const f of readdirSync(SPECS_DIR)) {
+	for (const f of readdirSync(opts.specsDir)) {
 		if (!f.endsWith(".md")) continue;
-		blocks.push(...extractBlocks(join(SPECS_DIR, f), counter));
+		blocks.push(...extractBlocks(join(opts.specsDir, f), counter));
 	}
-	const { checked, missing } = buildAssertionFile(blocks, srcMap);
-	const diags = runTsc();
+	const { checked, missing } = buildAssertionFile(blocks, srcMap, tmpFile);
+	const diags = runTsc(tmpFile);
 	classify(checked, diags);
 	try {
-		unlinkSync(TMP_FILE);
+		unlinkSync(tmpFile);
 	} catch {
 		// best effort
 	}
-	process.exit(printReport(checked, missing));
+	return { checked, missing };
 }
 
-main();
+function main(): void {
+	const showMissing = process.argv.includes("--show-missing");
+	const { checked, missing } = runDriftCheck({ specsDir: SPECS_DIR, srcDir: SRC_DIR });
+	process.exit(printReport(checked, missing, showMissing, ROOT));
+}
+
+// Only run main when invoked as a script, not when imported by tests.
+if (import.meta.url === `file://${process.argv[1]}`) {
+	main();
+}
