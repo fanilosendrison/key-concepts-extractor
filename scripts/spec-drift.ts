@@ -11,7 +11,14 @@
 // Run:  node --experimental-strip-types scripts/spec-drift.ts [--show-missing]
 // Exit: 0 = no drift, 1 = drift detected.
 
-import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	statSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -98,7 +105,7 @@ function extractBlocks(specFile: string, blockCounter: { n: number }): SpecBlock
 			line: lineNumber,
 			body,
 			declaredNames: names,
-			prefix: `B${String(blockCounter.n).padStart(3, "0")}_`,
+			prefix: `B${String(blockCounter.n).padStart(4, "0")}_`,
 		});
 	}
 	return blocks;
@@ -265,6 +272,10 @@ function main(): void {
 }
 
 // Only run main when invoked as a script, not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use realpathSync + fileURLToPath to handle symlinks, macOS /private/var
+// aliases, and non-POSIX path formats — a raw string equality on argv[1]
+// fails silently in any of those cases and the script would exit 0 without
+// running, masking drift in CI.
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	main();
 }

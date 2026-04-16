@@ -28,6 +28,11 @@ export interface QualityR1Error {
 }
 
 function fullR1Error(e: QualityR1Error): Record<string, unknown> {
+	if (e.error_type === "abusive_merge" && e.suggested_split === undefined) {
+		throw new Error(
+			`control-responses: R1 abusive_merge for "${e.target}" requires explicit suggested_split (spec mandates non-null array)`,
+		);
+	}
 	return {
 		target: e.target,
 		error_type: e.error_type,

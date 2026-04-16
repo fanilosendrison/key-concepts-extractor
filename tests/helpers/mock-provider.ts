@@ -1,7 +1,7 @@
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../../src/domain/ports.js";
 import type { ProviderLongId } from "../../src/domain/types.js";
 
-export interface MockCallRecord {
+interface MockCallRecord {
 	request: LLMRequest;
 	respondedAt: number;
 }
