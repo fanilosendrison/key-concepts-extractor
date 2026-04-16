@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { runExtraction } from "../src/domain/extraction-orchestrator.js";
 import { TransientLLMError } from "../src/domain/errors.js";
+import { runExtraction } from "../src/domain/extraction-orchestrator.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../src/domain/ports.js";
 import type { ProviderLongId } from "../src/domain/types.js";
 
