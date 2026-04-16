@@ -49,10 +49,6 @@ export function composeSignal(external?: AbortSignal, timeoutMs: number = TIMEOU
 	return external ? AbortSignal.any([timeout, external]) : timeout;
 }
 
-export function isRetriableHttpStatus(status: number): boolean {
-	return status === 429 || status === 503 || (status >= 500 && status <= 599);
-}
-
 export function isNonRetriableHttpStatus(status: number): boolean {
 	return status === 400 || status === 401 || status === 403 || status === 404;
 }
@@ -131,11 +127,9 @@ export async function runWithRetry(
 }
 
 export function classifyHttp(status: number, bodyText: string): Error {
-	if (isNonRetriableHttpStatus(status)) {
-		return new FatalLLMError(`HTTP ${status}: ${bodyText.slice(0, 200)}`);
-	}
-	if (isRetriableHttpStatus(status)) {
-		return new TransientLLMError(`HTTP ${status}: ${bodyText.slice(0, 200)}`);
-	}
-	return new TransientLLMError(`HTTP ${status}: ${bodyText.slice(0, 200)}`);
+	const msg = `HTTP ${status}: ${bodyText.slice(0, 200)}`;
+	if (isNonRetriableHttpStatus(status)) return new FatalLLMError(msg);
+	// Retriable (429/503/5xx) and unrecognised (e.g. 408, 422) both fall through
+	// to transient — recognised-retriable and "unknown" share the same handling.
+	return new TransientLLMError(msg);
 }
