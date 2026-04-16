@@ -49,7 +49,101 @@ describe("createOpenAIEmbeddingAdapter (DC-OPENAI-EMBEDDINGS)", () => {
 		expect(JSON.parse(init.body as string)).toMatchObject({
 			model: "text-embedding-3-small",
 			input: ["hi"],
+			encoding_format: "float",
 		});
+	});
+
+	it("T-EMB-04: batches 250 inputs as 100 + 100 + 50, preserves global order", async () => {
+		// Mock derives the global index from the TEXT CONTENT (each input is
+		// `t${globalIdx}`), so this test is invariant to dispatch order. It would
+		// still pass if embed() parallelised the batches via Promise.all.
+		globalThis.fetch = vi.fn(async (_url, init) => {
+			const body = JSON.parse((init as RequestInit).body as string);
+			const items = (body.input as string[]).map((text, localIdx) => ({
+				index: localIdx,
+				embedding: [Number(text.slice(1))],
+			}));
+			return new Response(JSON.stringify({ data: items }), { status: 200 });
+		}) as typeof fetch;
+
+		const adapter = createOpenAIEmbeddingAdapter({
+			apiKey: "sk-test",
+			model: "text-embedding-3-small",
+		});
+		const inputs = Array.from({ length: 250 }, (_, i) => `t${i}`);
+		const out = await adapter.embed(inputs);
+
+		const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+		// Assert exact packing, not "≤100" — contract §5 says max 100, but a
+		// degenerate split like 1/1/1/... would also satisfy ≤100 and defeat the
+		// purpose of batching (minimise API calls).
+		const batchSizes = calls.map((c) => {
+			const body = JSON.parse((c[1] as RequestInit).body as string);
+			return (body.input as string[]).length;
+		});
+		expect(batchSizes).toEqual([100, 100, 50]);
+		expect(out).toHaveLength(250);
+		expect(out.map((v) => v[0])).toEqual(inputs.map((_, i) => i));
+	});
+
+	it("T-EMB-07: exactly 100 inputs fits in a single batch (boundary)", async () => {
+		// Guards against an off-by-one in `i < texts.length`. A mis-written loop
+		// like `i + BATCH_SIZE <= texts.length` or `i <= texts.length` would emit
+		// two calls here (100 + 0) or fail differently.
+		const fetchMock = vi.fn(
+			async (_url, init) =>
+				new Response(
+					JSON.stringify({
+						data: (JSON.parse((init as RequestInit).body as string).input as string[]).map(
+							(_t, idx) => ({ index: idx, embedding: [idx] }),
+						),
+					}),
+					{ status: 200 },
+				),
+		) as typeof fetch;
+		globalThis.fetch = fetchMock;
+
+		const adapter = createOpenAIEmbeddingAdapter({
+			apiKey: "sk-test",
+			model: "text-embedding-3-small",
+		});
+		const inputs = Array.from({ length: 100 }, (_, i) => `t${i}`);
+		const out = await adapter.embed(inputs);
+
+		expect((fetchMock as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+		expect(out).toHaveLength(100);
+	});
+
+	it("T-EMB-05: empty input returns [] without hitting the API", async () => {
+		const adapter = createOpenAIEmbeddingAdapter({
+			apiKey: "sk-test",
+			model: "text-embedding-3-small",
+		});
+		const out = await adapter.embed([]);
+		expect(out).toEqual([]);
+		expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+	});
+
+	it("T-EMB-06: reorders within a batch when the API returns indices out of order", async () => {
+		globalThis.fetch = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						data: [
+							{ embedding: [0.9], index: 2 },
+							{ embedding: [0.1], index: 0 },
+							{ embedding: [0.5], index: 1 },
+						],
+					}),
+					{ status: 200 },
+				),
+		) as typeof fetch;
+		const adapter = createOpenAIEmbeddingAdapter({
+			apiKey: "sk-test",
+			model: "text-embedding-3-small",
+		});
+		const out = await adapter.embed(["a", "b", "c"]);
+		expect(out).toEqual([[0.1], [0.5], [0.9]]);
 	});
 
 	it("T-EMB-03: aborts in-flight request when caller signal aborts", async () => {
