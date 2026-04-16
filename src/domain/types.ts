@@ -127,6 +127,7 @@ export type PipelineEventType =
 	| "extraction_complete"
 	| "extraction_error"
 	| "extraction_progress"
+	| "concept_dropped"
 	| "fusion_intra_start"
 	| "fusion_intra_complete"
 	| "fusion_inter_start"

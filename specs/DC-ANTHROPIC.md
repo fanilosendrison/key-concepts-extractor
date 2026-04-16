@@ -131,7 +131,7 @@ const response = await fetch(endpoint + '/v1/messages', {
     system: request.systemPrompt,
     messages: [{ role: 'user', content: request.userPrompt }],
   }),
-  signal: AbortSignal.timeout(120000),
+  signal: AbortSignal.timeout(300000),
 });
 
 if (!response.ok) {

@@ -71,7 +71,7 @@ Three concrete implementations: `AnthropicAdapter`, `OpenAIAdapter`, `GoogleAdap
 async function call(request: LLMRequest): Promise<LLMResponse> {
   const maxRetries = 3;
   const backoffMs = [5000, 15000, 45000];
-  const timeoutMs = 120000;
+  const timeoutMs = 300000;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
@@ -213,7 +213,7 @@ Output: {
 ### 5.2 Retry then success
 
 ```javascript
-Call 1: timeout after 120s → wait 5s
+Call 1: timeout after 300s → wait 5s
 Call 2: 429 rate limit → wait 15s
 Call 3: success → return LLMResponse
 ```
@@ -236,7 +236,7 @@ Call 4: 500 → throw FatalLLMError({ provider: 'google', error: '500 Internal S
 | 401 Unauthorized | Immediate FatalLLMError (non-retriable), retriesExhausted: false |
 | Response is valid HTTP but not valid JSON | RetriableError, retry up to 3 times |
 | Response is valid JSON but wrong schema | Not this module's concern — caller validates schema |
-| Timeout at exactly 120s | Treated as timeout, retriable |
+| Timeout at exactly 300s | Treated as timeout, retriable |
 | Empty response body | Treated as invalid JSON, retriable |
 | Network error (DNS, connection refused) | Retriable |
 | Provider returns thinking blocks mixed with content | Extract text blocks only (see DC for each provider) |

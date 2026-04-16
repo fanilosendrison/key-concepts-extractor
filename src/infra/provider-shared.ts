@@ -7,7 +7,7 @@ export interface ProviderAdapterConfig {
 	endpoint?: string;
 }
 
-export const TIMEOUT_MS = 120_000;
+export const TIMEOUT_MS = 300_000;
 export const MAX_RETRIES = 3;
 export const BACKOFF_MS = [5000, 15000, 45000] as const;
 

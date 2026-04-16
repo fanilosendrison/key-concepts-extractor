@@ -127,7 +127,7 @@ const response = await fetch(url, {
     contents: [{ role: 'user', parts: [{ text: request.userPrompt }] }],
     generationConfig: { thinking_config: { thinking_level: 'HIGH' } },
   }),
-  signal: AbortSignal.timeout(120000),
+  signal: AbortSignal.timeout(300000),
 });
 
 const data = await response.json();

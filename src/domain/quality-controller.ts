@@ -172,7 +172,16 @@ export async function runQualityControl<T extends ControllableConcept>(
 				// R3 "maintained" overrides and skips correction (final arbiter).
 				if (r3Decision && r3Decision.decision === "maintained") continue;
 
-				const split = resolveSuggestedSplit(error, r3Decision, "R1");
+				let split: string[] | null;
+				try {
+					split = resolveSuggestedSplit(error, r3Decision, "R1");
+				} catch (e) {
+					if (e instanceof ControlSchemaError) {
+						warn({ reason: "correction_dropped", target: error.target, error_type: error.error_type, detail: e.message });
+						continue;
+					}
+					throw e;
+				}
 				if (!review || review.verdict === "confirmed") {
 					corrections.push(buildCorrection(error, "claude", review ? "gpt" : null, split));
 				} else {
@@ -185,7 +194,16 @@ export async function runQualityControl<T extends ControllableConcept>(
 				if (!r3) continue;
 				const r3Decision = r3.final_decisions.find((d) => d.target === error.target);
 				if (!r3Decision || r3Decision.decision === "maintained") continue;
-				const split = resolveSuggestedSplit(error, r3Decision, "R2");
+				let split: string[] | null;
+				try {
+					split = resolveSuggestedSplit(error, r3Decision, "R2");
+				} catch (e) {
+					if (e instanceof ControlSchemaError) {
+						warn({ reason: "correction_dropped", target: error.target, error_type: error.error_type, detail: e.message });
+						continue;
+					}
+					throw e;
+				}
 				corrections.push(buildCorrection(error, "gpt", "claude", split));
 			}
 
