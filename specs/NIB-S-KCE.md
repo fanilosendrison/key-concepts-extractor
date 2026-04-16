@@ -99,7 +99,7 @@ interface LLMError {
 }
 ```
 
-**Contract:** Each adapter handles retry (3 attempts, backoff 5s/15s/45s) and timeout (120s) internally. After 3 failed retries, throws a fatal `LLMError` with `retriesExhausted: true`.
+**Contract:** Each adapter handles retry (3 attempts, backoff 5s/15s/45s) and timeout (600s) internally. After 3 failed retries, throws a fatal `LLMError` with `retriesExhausted: true`.
 
 ### 3.3 ExtractionOrchestrator
 
@@ -452,7 +452,7 @@ interface ServerConfig {
 - Number of models: 3
 - Number of angles: 5
 - Max control rounds: 3
-- Timeout per call: 120s
+- Timeout per call: 600s
 - Max retries: 3
 - Backoff sequence: [5000, 15000, 45000] ms
 
@@ -484,7 +484,7 @@ interface ServerConfig {
 
 **P3 — All LLM outputs are strict JSON.** No markdown, no preamble, no commentary. Every LLM call includes this instruction. Response parsing must validate JSON and report parse errors as retriable failures.
 
-**P4 — Retry policy: uniform.** 120s timeout, 3 retries, backoff 5s/15s/45s. Applies to all API calls (extraction and controls). JSON parse failure counts as a retriable error.
+**P4 — Retry policy: uniform.** 600s timeout, 3 retries, backoff 5s/15s/45s. Applies to all API calls (extraction and controls). JSON parse failure counts as a retriable error.
 
 **P5 — Event emission via shared emitter.** All modules receive an `EventEmitter` at construction. Events are defined in Spec v1.5 §13. The emitter writes to events.jsonl AND forwards to WebSocket clients (if any).
 
