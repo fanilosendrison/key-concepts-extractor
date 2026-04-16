@@ -90,6 +90,13 @@ export interface QualityR3Decision {
 }
 
 function fullR3Decision(d: QualityR3Decision): Record<string, unknown> {
+	// Per NIB-M-LLM-PAYLOADS Type 4: correction_applied describes the
+	// correction itself (e.g. the new category for incorrect_categorization,
+	// the rewritten justification for justification_incoherence) — NOT the
+	// reasoning for why it was corrected. Default to empty string on
+	// "corrected" (caller supplies the actual correction text) and null on
+	// "maintained". Collapsing it to `reasoning` would silently conflate the
+	// two fields against a parser that ever cross-reads them.
 	return {
 		target: d.target,
 		origin: d.origin ?? "claude_round1",
@@ -98,7 +105,7 @@ function fullR3Decision(d: QualityR3Decision): Record<string, unknown> {
 			d.correction_applied !== undefined
 				? d.correction_applied
 				: d.decision === "corrected"
-					? d.reasoning
+					? ""
 					: null,
 		suggested_split: d.suggested_split ?? null,
 		reasoning: d.reasoning,
@@ -165,21 +172,23 @@ export interface RelevanceR3Summary {
 	retained_unanimous?: number;
 }
 
-// Derive what we can from the decisions list so the summary is internally
-// consistent by default. retained_after_dispute cannot be inferred (requires
-// knowledge of the R1/R2 disagreement trace) — default to 0, override when
-// the test scenario cares about the distinction.
+// Per NIB-M-LLM-PAYLOADS Type 7, R3 `final_decisions` only contains concepts
+// that reached R3 — i.e. concepts that were disputed (flagged by one side,
+// defended or confirmed by the other). A non-removed R3 decision is therefore
+// "retained after dispute", NOT "retained unanimous". Unanimous retention
+// lives upstream of R3 and is invisible from the decisions list — default to
+// 0 and let scenarios that care override.
 function deriveSummary(
 	decisions: RelevanceR3Decision[],
 	override?: RelevanceR3Summary,
 ): RelevanceR3Summary {
 	const removed = decisions.filter((d) => d.decision === "removed").length;
-	const retained = decisions.length - removed;
+	const retainedAfterDispute = decisions.length - removed;
 	return {
 		total_evaluated: override?.total_evaluated ?? decisions.length,
 		removed: override?.removed ?? removed,
-		retained_after_dispute: override?.retained_after_dispute ?? 0,
-		retained_unanimous: override?.retained_unanimous ?? retained,
+		retained_after_dispute: override?.retained_after_dispute ?? retainedAfterDispute,
+		retained_unanimous: override?.retained_unanimous ?? 0,
 	};
 }
 

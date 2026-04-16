@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
 	AngleId,
@@ -62,8 +62,16 @@ async function writeJson(path: string, value: unknown): Promise<void> {
 	// prevents tmp-path collision when two writeJson calls land in the same
 	// millisecond (T-WS-04 race: pipeline manifest update vs DELETE stopRun).
 	const tmp = `${path}.tmp.${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}`;
-	await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-	await rename(tmp, path);
+	try {
+		await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+		await rename(tmp, path);
+	} catch (err) {
+		// On writeFile/rename failure, the tmp file may have been partially
+		// created. Clean up so runDir doesn't accumulate .tmp.* orphans across
+		// retry loops or crash-recovery flows.
+		await unlink(tmp).catch(() => {});
+		throw err;
+	}
 }
 
 async function readJson<T>(path: string): Promise<T> {

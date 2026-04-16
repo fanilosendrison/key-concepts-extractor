@@ -121,10 +121,10 @@ describe("QualityController", () => {
 	});
 
 	it("T-QC-MINIMAL: parser accepts bare-minimum LLM JSON (spec-mandated extras omitted)", async () => {
-		// Bypass the helpers on purpose: we validate the parser's tolerance layer
-		// against an LLM that omits every spec-optional field. If a future parser
-		// tightens one of these into a required field, this test fails first and
-		// forces an explicit decision (per discussion on fail-closed scope).
+		// Bypass the helpers on purpose: validate parser tolerance against an LLM
+		// that omits every spec-optional field across all 3 rounds. R2 contests
+		// so R3 is actually consumed — otherwise R3's bare-minimum shape would
+		// be untested and the parser tolerance on R3 would only appear covered.
 		const r1Bare = JSON.stringify({
 			errors_found: [
 				{
@@ -135,7 +135,7 @@ describe("QualityController", () => {
 			],
 		});
 		const r2Bare = JSON.stringify({
-			reviews_of_claude: [{ target: "consistency / reliability", verdict: "confirmed" }],
+			reviews_of_claude: [{ target: "consistency / reliability", verdict: "contested" }],
 		});
 		const r3Bare = JSON.stringify({
 			final_decisions: [
@@ -146,8 +146,6 @@ describe("QualityController", () => {
 				},
 			],
 		});
-		// Pipeline short-circuits to 2 rounds when R2 confirms without contest.
-		// R3 queued but not consumed — asserted below.
 		const anthropic = createMockProvider("anthropic", [r1Bare, r3Bare]);
 		const openai = createMockProvider("openai", [r2Bare]);
 		const result = await runQualityControl({
@@ -157,9 +155,9 @@ describe("QualityController", () => {
 			anthropic,
 			openai,
 		});
-		expect(result.report.review_rounds).toBe(2);
+		expect(result.report.review_rounds).toBe(3);
+		expect(anthropic.remaining).toBe(0);
 		expect(result.correctedList.map((c) => c.term).sort()).toEqual(["consistency", "reliability"]);
-		expect(anthropic.remaining).toBe(1);
 	});
 
 	it("P-08: quality never decreases count", async () => {

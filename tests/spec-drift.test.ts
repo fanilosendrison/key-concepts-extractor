@@ -42,7 +42,11 @@ describe("runDriftCheck", () => {
 			"foo.ts": "export interface Foo { a: number; b: string; }\n",
 		});
 
-		const { checked, missing } = runDriftCheck({ specsDir, srcDir });
+		const { checked, missing } = runDriftCheck({
+			specsDir,
+			srcDir,
+			tmpFile: join(root, "drift-assertion.ts"),
+		});
 
 		expect(checked).toHaveLength(1);
 		expect(checked[0]?.name).toBe("Foo");
@@ -62,7 +66,11 @@ describe("runDriftCheck", () => {
 			"bar.ts": "export interface Bar { a: number; c: boolean; }\n",
 		});
 
-		const { checked, missing } = runDriftCheck({ specsDir, srcDir });
+		const { checked, missing } = runDriftCheck({
+			specsDir,
+			srcDir,
+			tmpFile: join(root, "drift-assertion.ts"),
+		});
 
 		expect(checked).toHaveLength(1);
 		expect(checked[0]?.name).toBe("Bar");
@@ -83,7 +91,11 @@ describe("runDriftCheck", () => {
 			"placeholder.ts": "export interface Other { y: number; }\n",
 		});
 
-		const { checked, missing } = runDriftCheck({ specsDir, srcDir });
+		const { checked, missing } = runDriftCheck({
+			specsDir,
+			srcDir,
+			tmpFile: join(root, "drift-assertion.ts"),
+		});
 
 		expect(checked).toHaveLength(0);
 		expect(missing).toHaveLength(1);

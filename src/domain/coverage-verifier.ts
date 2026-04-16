@@ -21,13 +21,21 @@ function escapeRegex(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Unicode-aware word boundary: handles accented terms ("café", "naïve") and
-// NFD-composed characters that ASCII \b would miss.
+// Unicode-aware word boundary.
+// Two gotchas the naive fix missed: (1) NFD decomposition — "café" stored
+// as "cafe" + U+0301 would match "cafe" inside because U+0301 (\p{M}) was
+// treated as non-letter by the lookaround; normalize both sides to NFC.
+// (2) The boundary class must also exclude combining marks (\p{M}) and
+// connector punctuation (\p{Pc}, e.g. underscore) so "foo" doesn't match
+// inside "foo_bar" or a base+mark sequence.
 function checkExplicit(term: string, sourceText: string): boolean {
-	const trimmed = term.trim();
+	const trimmed = term.trim().normalize("NFC");
 	if (trimmed.length === 0) return false;
-	const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}])`, "iu");
-	return pattern.test(sourceText);
+	const pattern = new RegExp(
+		`(?<![\\p{L}\\p{N}\\p{M}\\p{Pc}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}\\p{M}\\p{Pc}])`,
+		"iu",
+	);
+	return pattern.test(sourceText.normalize("NFC"));
 }
 
 function isFragile(concept: FinalConcept): boolean {

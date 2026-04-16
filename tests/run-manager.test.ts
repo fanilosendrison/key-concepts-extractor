@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RUN_CONFIG } from "../src/domain/types.js";
+import { logger } from "../src/infra/logger.js";
 import { createRunManager, listRuns } from "../src/infra/run-manager.js";
 import { cleanupTempDir, createTempDir } from "./helpers/temp-dir.js";
 
@@ -13,6 +14,7 @@ describe("RunManager", () => {
 		baseDir = await createTempDir();
 	});
 	afterEach(async () => {
+		vi.restoreAllMocks();
 		await cleanupTempDir(baseDir);
 	});
 
@@ -135,6 +137,7 @@ describe("RunManager", () => {
 	});
 
 	it("T-RM-DIAG-WARN: persistDiagnostics without prior persistInterAngle writes diagnostics.json and warns", async () => {
+		const warnSpy = vi.spyOn(logger, "warn");
 		const rm = createRunManager(baseDir);
 		await rm.initRun(DEFAULT_RUN_CONFIG, "cli");
 		const report = {
@@ -150,6 +153,13 @@ describe("RunManager", () => {
 		expect(existsSync(join(rm.runDir, "fusion-inter", "merged.json"))).toBe(false);
 		const written = JSON.parse(await readFile(join(rm.runDir, "diagnostics.json"), "utf-8"));
 		expect(written).toEqual(report);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				runId: rm.runId,
+				mergedPath: expect.stringContaining("merged.json"),
+			}),
+			expect.stringMatching(/merged\.json missing/),
+		);
 	});
 
 	it("P-05: isolation between runs", async () => {
