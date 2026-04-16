@@ -246,20 +246,28 @@ interface RelevanceReport {
   removed: RelevanceRemoval[];
   retained_after_dispute: RelevanceRetention[];
 }
-// Field naming follows NIB-M-LLM-PAYLOADS (`target`/`reason`) — the LLM
-// schema dictates the wire shape, propagated unchanged through the parser.
+// Field naming follows NIB-M-LLM-PAYLOADS (`term` as in Types 5/6/7) — the
+// LLM schema dictates the wire shape, propagated unchanged through the parser.
 // `confirmed_by` is nullable for the no-round-3 path (GPT-only flag retained).
+// Both `justification_flagger` and `justification_confirmer` are kept so the
+// audit trail carries why each side made its call, not just the outcome.
 interface RelevanceRemoval {
-  target: string;
-  reason: string;
+  term: string;
   flagged_by: 'claude' | 'gpt';
   confirmed_by: 'claude' | 'gpt' | null;
+  justification_flagger: string;
+  justification_confirmer: string;
 }
-// Minimal shape: only the audit signal (which term, how it was defended) is
-// kept. Per-round provenance can be recovered from events.jsonl if needed.
+// Retention audit trail: which side flagged, which side defended, both
+// rationales, and the final decision text. Needed to reconstruct why a
+// disputed concept survived without re-reading events.jsonl.
 interface RelevanceRetention {
-  target: string;
-  defense: string;
+  term: string;
+  flagged_by: 'claude' | 'gpt';
+  defended_by: 'claude' | 'gpt';
+  justification_flagger: string;
+  counter_argument_defender: string;
+  final_decision: string;
 }
 ```
 

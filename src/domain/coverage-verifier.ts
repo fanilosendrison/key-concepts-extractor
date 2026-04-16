@@ -28,6 +28,13 @@ function escapeRegex(s: string): string {
 // (2) The boundary class must also exclude combining marks (\p{M}) and
 // connector punctuation (\p{Pc}, e.g. underscore) so "foo" doesn't match
 // inside "foo_bar" or a base+mark sequence.
+// Non-alphanum edges (intentional): when the term starts or ends with a
+// non-letter/digit (e.g. "C++", ".NET", "#hashtag"), the lookaround on
+// that side is vacuously satisfied against ANY following/preceding char.
+// So "C++" matches inside "C++17" and ".NET" matches inside ".NETCore".
+// This is the expected behavior for KCE — a word boundary only has
+// meaning against a word character. Concepts with punctuation edges are
+// matched greedily by design, not by oversight.
 function checkExplicit(term: string, sourceText: string): boolean {
 	const trimmed = term.trim().normalize("NFC");
 	if (trimmed.length === 0) return false;
