@@ -5,6 +5,7 @@ import {
 	CANONICAL_ANGLES,
 	CONCEPT_CATEGORIES,
 	GRANULARITY_LEVELS,
+	type PipelineEventType,
 	type ProviderId,
 	type ProviderLongId,
 	type RawConcept,
@@ -79,7 +80,7 @@ export interface ExtractionPass {
 export interface ExtractionDeps {
 	adapters: Record<ProviderLongId, ProviderAdapter>;
 	onPass?: (pass: ExtractionPass) => Promise<void>;
-	emit?: (type: string, payload: Record<string, unknown>) => void;
+	emit?: (type: PipelineEventType, payload: Record<string, unknown>) => void;
 	signal?: AbortSignal | undefined;
 }
 

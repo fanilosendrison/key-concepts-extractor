@@ -109,20 +109,40 @@ export type PipelinePhase =
 	| "diagnostics"
 	| "run";
 
+// NIB-M-EVENT-LOGGER §2 — closed union. Every emit must pass one of these ;
+// adding a new event type requires amending both NIB-M-EVENT-LOGGER §2 and §4.
+export type PipelineEventType =
+	| "input_processed"
+	| "extraction_start"
+	| "extraction_complete"
+	| "extraction_error"
+	| "extraction_progress"
+	| "fusion_intra_start"
+	| "fusion_intra_complete"
+	| "fusion_inter_start"
+	| "fusion_inter_complete"
+	| "control_start"
+	| "control_complete"
+	| "control_result"
+	| "quality_warning"
+	| "coverage_complete"
+	| "run_complete"
+	| "run_error"
+	| "run_stopped";
+
 export interface PipelineEvent {
 	timestamp: string;
 	phase: PipelinePhase;
-	type: string;
+	type: PipelineEventType;
 	payload: Record<string, unknown>;
 }
 
 export type RunStatus = "running" | "completed" | "failed" | "stopped";
 
-// NIB-M-RUN-MANAGER §4.2 : persisted manifest.config shape. Also the runtime
-// shape consumed by the pipeline (model IDs for metadata + embedding_threshold
-// for fusion-inter). API keys and endpoints live on provider adapters, not here.
-// NB: spec §3.10 reads `Record<ProviderId, string>` ; spec example §4.2 uses
-// long IDs as keys ('anthropic'/'openai'/'google') — we follow the example.
+// NIB-S-KCE §3.10 : persisted manifest.config shape. Also the runtime shape
+// consumed by the pipeline (model IDs for metadata + embedding_threshold for
+// fusion-inter). Secrets and endpoints live inside adapter closures, never on
+// this object (NIB-S-KCE §3.15).
 export interface RunConfig {
 	models: Record<ProviderLongId, string>;
 	embedding_model: string;

@@ -1,7 +1,7 @@
 ---
 id: NIB-S-KCE
 type: nib-system
-version: "1.0.0"
+version: "2.0.0"
 scope: key-concepts-extractor
 status: approved
 validates: [src/pipeline.ts, src/index.ts, tests/pipeline-integration.test.ts]
@@ -336,7 +336,7 @@ interface RunConfig {
 interface PipelineEvent {
   timestamp: string;                  // ISO 8601 with ms
   phase: 'input' | 'extraction' | 'fusion_intra' | 'fusion_inter' | 'diagnostics' | 'run';
-  type: string;                       // See Spec v1.5 §13 for all event types
+  type: PipelineEventType;            // Closed union — see NIB-M-EVENT-LOGGER §2
   payload: Record<string, unknown>;
 }
 ```
@@ -385,29 +385,34 @@ const PROVIDERS: { id: ProviderLongId; shortId: ProviderId }[] = [
 ];
 ```
 
-### 3.15 PipelineConfig
+### 3.15 Startup configuration (composite)
 
-Consolidated configuration interface. Resolved at startup and injected into all modules. No module reads configuration from environment variables directly (policy P6).
+Configuration is resolved once at startup and split into three disjoint parts. No module reads environment variables directly (policy P6), and **secrets never transit the module injection bus** — they live only inside provider adapter closures. This keeps API keys out of every downstream call site (extraction, fusion, QC, RC, diagnostics, web).
 
 ```typescript
-interface PipelineConfig {
-  // Provider credentials
-  anthropic: { apiKey: string; model: string; endpoint: string };
-  openai: { apiKey: string; model: string; endpoint: string };
-  google: { apiKey: string; model: string; endpoint: string };
+// Persisted in run-manifest. No secrets, no paths, no ports.
+// See §3.10 RunConfig for the authoritative shape.
 
-  // Embedding
-  embeddingModel: string;
+// Baked into provider adapter closures at startup — opaque to all modules.
+interface ResolvedSecrets {
+  anthropicApiKey: string;
+  openaiApiKey: string;
+  googleApiKey: string;
+}
 
-  // Fusion thresholds
-  levenshteinThreshold: number;
-  embeddingThreshold: number;
+// Startup loader returns the composite. Adapters are then constructed from
+// RunConfig + ResolvedSecrets and passed down as opaque ProviderAdapter ports ;
+// downstream modules never see apiKey / endpoint.
+interface ResolvedStartupConfig {
+  runConfig: RunConfig;
+  secrets: ResolvedSecrets;
+  baseDir: string;       // default: ~/.kce — runs live under `${baseDir}/runs/`
+}
 
-  // Storage
-  runsDir: string;
-
-  // Server (web mode only)
-  port: number;
+// Web-mode only. Passed to the WebServer constructor, not part of the composite
+// above (CLI mode never reads it).
+interface ServerConfig {
+  port: number;          // default: 3000
 }
 ```
 
