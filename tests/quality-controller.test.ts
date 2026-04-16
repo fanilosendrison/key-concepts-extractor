@@ -60,6 +60,14 @@ describe("QualityController", () => {
 		// NIB-M-QC §4.4 line 189-191 : split concepts built from `suggested_split`
 		// with `term` and `variants` overridden in the array order provided by the LLM.
 		expect(result.correctedList.map((c) => c.term)).toEqual(["consistency", "reliability"]);
+		// Provenance reset invariant: every split concept carries derived_from
+		// pointing at the parent, and its provenance fields are wiped.
+		for (const c of result.correctedList) {
+			expect(c.derived_from).toBe("consistency / reliability");
+			expect(c.found_by_models).toEqual([]);
+			expect(c.consensus).toBe("1/3");
+			expect(c.justifications).toEqual([]);
+		}
 	});
 
 	it("T-QC-03: contested → R3 resolves as corrected → 3 rounds", async () => {

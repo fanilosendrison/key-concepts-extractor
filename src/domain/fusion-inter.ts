@@ -147,7 +147,14 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 
 		const anglesCount = deriveAnglesCount(Object.keys(angleProv).length);
 
-		return {
+		// Propagate derivation: the FinalConcept is derived iff every cluster
+		// member is itself derived. A single non-derived member means the
+		// concept was grounded by a real extraction from at least one angle —
+		// the derived-pieces are subsumed by that real attribution.
+		const allDerived = cluster.members.every((m) => m.concept.derived_from !== undefined);
+		const derivedFrom = allDerived ? cluster.members[0]?.concept.derived_from : undefined;
+
+		const final: FinalConcept = {
 			canonical_term: canonical,
 			variants,
 			category,
@@ -157,5 +164,7 @@ export async function fuseInterAngle(input: InterAngleInput): Promise<FinalConce
 			angles_count: anglesCount,
 			justifications,
 		};
+		if (derivedFrom !== undefined) final.derived_from = derivedFrom;
+		return final;
 	});
 }
