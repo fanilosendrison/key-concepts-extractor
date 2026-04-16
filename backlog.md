@@ -1,3 +1,2 @@
 # Backlog
 
-- [ ] [SPEC-DESIGN] src/domain/types.ts withTerm — héritage intégral de `angle_provenance`, `angles_count`, `justifications` lors du split est **spec-prescribed** (NIB-M-QUALITY-CONTROLLER §4.4 ligne 216 : "Other fields [...] `angle_provenance` are inherited as-is" + ligne 190-192 : "QC may re-flag on subsequent pass if inherited category/granularity is incorrect"). Le compromis est assumé : sur-attribution temporaire acceptée, re-correction possible au pass suivant. Code conforme. Si remise en cause souhaitée → discussion spec séparée (impacte NIB-M-QC + DC-* + prompts LLM). (date: 2026-04-15, source: senior-review post-MAJOR-fixes ; downgraded MAJOR→SPEC-DESIGN le 2026-04-16 après vérif spec §4.4)

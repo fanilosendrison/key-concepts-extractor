@@ -58,6 +58,10 @@ function checkExplicit(term: string, sourceText: string): boolean {
 
 function isFragile(concept: FinalConcept): boolean {
 	if (concept.explicit_in_source) return false;
+	// Split-derived concepts carry no real provenance (reset in withTerm per
+	// NIB-M-QC §4.4). Not explicit in source + no trustworthy attribution =
+	// fragile by definition.
+	if (concept.derived_from !== undefined) return true;
 	const angles = Object.keys(concept.angle_provenance) as AngleId[];
 	if (angles.length !== 1) return false;
 	const only = angles[0];

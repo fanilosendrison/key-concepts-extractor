@@ -66,6 +66,12 @@ export interface MergedConcept {
 	consensus: Consensus;
 	variants: string[];
 	justifications?: string[];
+	// NIB-M-QC §4.4 : set when the concept was produced by splitting a parent
+	// cluster during quality control. Carries the parent term so downstream
+	// audits can trace derivation. When present, provenance fields
+	// (found_by_models, consensus, justifications) are reset on split because
+	// the parent's provenance was about the merged cluster, not each split.
+	derived_from?: string;
 }
 
 export interface AngleProvenanceEntry {
@@ -82,6 +88,10 @@ export interface FinalConcept {
 	angle_provenance: Partial<Record<AngleId, AngleProvenanceEntry>>;
 	angles_count: AnglesCount;
 	justifications: string[];
+	// See MergedConcept.derived_from. On split, angle_provenance is reset to {}
+	// and justifications to [] so diagnostics and coverage don't inflate counts
+	// on a concept whose provenance is synthetic.
+	derived_from?: string;
 }
 
 export interface InputFileDescriptor {
@@ -262,9 +272,33 @@ export function getTerm(c: ControllableConcept): string {
 	return "term" in c ? c.term : c.canonical_term;
 }
 
+// Build a split-derived concept. Per NIB-M-QC §4.4: inherit category,
+// granularity, and explicit_in_source from the parent (those hold after
+// splitting), but RESET provenance fields — found_by_models / consensus /
+// angle_provenance / angles_count / justifications were recorded about the
+// merged cluster and do not apply to each split piece. Set derived_from so
+// downstream (diagnostics, coverage) can treat synthetic concepts honestly.
 export function withTerm<T extends ControllableConcept>(concept: T, term: string): T {
 	if ("term" in concept) {
-		return { ...concept, term, variants: [term] };
+		const out: MergedConcept = {
+			...concept,
+			term,
+			variants: [term],
+			found_by_models: [],
+			consensus: "1/3",
+			justifications: [],
+			derived_from: concept.term,
+		};
+		return out as T;
 	}
-	return { ...concept, canonical_term: term, variants: [term] };
+	const out: FinalConcept = {
+		...concept,
+		canonical_term: term,
+		variants: [term],
+		angle_provenance: {},
+		angles_count: "1/5",
+		justifications: [],
+		derived_from: concept.canonical_term,
+	};
+	return out as T;
 }

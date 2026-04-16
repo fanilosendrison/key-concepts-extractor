@@ -175,6 +175,11 @@ interface FinalConcept {
   }>;
   angles_count: AnglesCount;          // '1/5' | '2/5' | '3/5' | '4/5' | '5/5'
   justifications: string[];
+  // Set when this concept was split from a parent cluster by QC
+  // (NIB-M-QUALITY-CONTROLLER §4.4). angle_provenance is reset to {} and
+  // justifications to [] on split — downstream modules discount synthetic
+  // concepts using this flag.
+  derived_from?: string;
 }
 // Persisted format for merged.json (wraps FinalConcept[] with metadata)
 interface MergedOutput {
