@@ -10,6 +10,11 @@ export interface ProviderAdapterConfig {
 export const TIMEOUT_MS = 600_000;
 export const MAX_RETRIES = 3;
 export const BACKOFF_MS = [5000, 15000, 45000] as const;
+// Total wallclock ceiling per call. Retries exist to recover from transient
+// failures (429/503/parse); if we've already burned two full timeouts, the
+// model is too slow and further retries waste wallclock. Caps worst case
+// from 41 min (4 × TIMEOUT + backoff) to ~20 min.
+export const MAX_TOTAL_DURATION_MS = TIMEOUT_MS * 2;
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -55,11 +60,23 @@ export async function runWithRetry(
 	provider: ProviderLongId,
 	callOnce: () => Promise<string>,
 	signal?: AbortSignal,
+	// Override of the total wallclock budget — test-only. Production uses the default.
+	maxTotalDurationMs: number = MAX_TOTAL_DURATION_MS,
 ): Promise<{ content: string; latencyMs: number }> {
 	let lastError: unknown;
+	const startedAt = Date.now();
+	// The budget only gates retries (attempt > 0). The first attempt always
+	// runs — a wallclock budget of 0 still authorises one call, not zero.
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (signal?.aborted) throw signal.reason ?? new Error("aborted");
 		if (attempt > 0) {
+			// Budget check before sleeping — refuse to burn more time on a call
+			// that has already consumed its wallclock ceiling.
+			if (Date.now() - startedAt >= maxTotalDurationMs) {
+				throw new FatalLLMError(
+					`Provider ${provider} exceeded total wallclock budget of ${maxTotalDurationMs}ms after ${attempt} attempts`,
+				);
+			}
 			const delay = BACKOFF_MS[attempt - 1] ?? BACKOFF_MS[BACKOFF_MS.length - 1] ?? 45000;
 			// Interruptible: external abort rejects sleep and stops retry.
 			await sleep(delay, signal);

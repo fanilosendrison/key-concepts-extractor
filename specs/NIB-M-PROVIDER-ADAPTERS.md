@@ -72,9 +72,14 @@ async function call(request: LLMRequest): Promise<LLMResponse> {
   const maxRetries = 3;
   const backoffMs = [5000, 15000, 45000];
   const timeoutMs = 600000;
+  const maxTotalDurationMs = 2 * timeoutMs;  // wallclock ceiling per call
 
+  const startedAt = Date.now();
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
+      if (Date.now() - startedAt >= maxTotalDurationMs) {
+        throw new FatalLLMError(`Provider ${request.provider} exceeded total wallclock budget of ${maxTotalDurationMs}ms`);
+      }
       await sleep(backoffMs[attempt - 1]);
       emitter.emit(retryEvent(request, attempt));
     }
@@ -237,6 +242,7 @@ Call 4: 500 → throw FatalLLMError({ provider: 'google', error: '500 Internal S
 | Response is valid HTTP but not valid JSON | RetriableError, retry up to 3 times |
 | Response is valid JSON but wrong schema | Not this module's concern — caller validates schema |
 | Timeout at exactly 600s | Treated as timeout, retriable |
+| Two consecutive timeouts (elapsed ≥ 1200s) | FatalLLMError with a "exceeded total wallclock budget" message — remaining retries skipped |
 | Empty response body | Treated as invalid JSON, retriable |
 | Network error (DNS, connection refused) | Retriable |
 | Provider returns thinking blocks mixed with content | Extract text blocks only (see DC for each provider) |

@@ -62,5 +62,36 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			await expect(runWithRetry("openai", callOnce, ac.signal)).rejects.toThrow("before-start");
 			expect(calls).toBe(0);
 		});
+
+		it("T-PS-07: wallclock budget exhausted — fails with distinct message, skips remaining retries", async () => {
+			// Budget = 0ms forces the budget check to trip at the start of
+			// attempt 1 (elapsed > 0). The error MUST carry the budget-specific
+			// message so we distinguish it from the retries-exhausted fatal
+			// (which would show `calls === MAX_RETRIES + 1 === 4`, not 1).
+			let calls = 0;
+			const callOnce = async () => {
+				calls += 1;
+				throw new TransientLLMError("fail");
+			};
+			await expect(runWithRetry("anthropic", callOnce, undefined, 0)).rejects.toThrow(
+				/exceeded total wallclock budget/,
+			);
+			expect(calls).toBe(1);
+		});
+
+		it("T-PS-08: generous budget allows the full retry sequence", async () => {
+			// Positive control for T-PS-07 : with a large budget, a fast-throwing
+			// callOnce should walk through MAX_RETRIES + 1 = 4 attempts and fail
+			// with retries-exhausted, not with the budget message.
+			let calls = 0;
+			const callOnce = async () => {
+				calls += 1;
+				throw new TransientLLMError("fail");
+			};
+			await expect(runWithRetry("anthropic", callOnce, undefined, 10 * 60_000)).rejects.toThrow(
+				/failed after \d+ retries/,
+			);
+			expect(calls).toBe(4);
+		}, 90_000); // allow the 5s+15s+45s real backoff sequence
 	});
 });
