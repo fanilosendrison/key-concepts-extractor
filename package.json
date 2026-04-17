@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests",
     "lint": "biome check src/",
     "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "kce": "node --env-file-if-exists=.env --import tsx src/cli/bin.ts"
   },
   "keywords": [

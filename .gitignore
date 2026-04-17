@@ -34,6 +34,7 @@ __pycache__/
 
 # ---------- Claude Code local state ----------
 .claude/
+.claude/run/
 
 # ---------- IDE & Editor ----------
 .idea/
