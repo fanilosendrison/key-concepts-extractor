@@ -72,7 +72,6 @@ htmlcov/
 # ---------- Stack-specific (TypeScript / Node) ----------
 *.tsbuildinfo
 .turbo/
-.spec-drift-check.ts
 
 # ---------- Generated / Tool artifacts ----------
 STACK_EVAL.yaml
