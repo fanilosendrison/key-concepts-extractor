@@ -160,7 +160,12 @@ export async function runWithRetry(
 		} catch (err) {
 			lastError = err;
 			if (err instanceof FatalLLMError) throw err;
-			// External cancel (or per-attempt timeout) is terminal — do not burn retries on it.
+			// Only external cancellation is terminal here. A per-attempt timeout
+			// (AbortSignal.timeout fires while signal?.aborted === false) falls
+			// through to the transient branch below and retries — aligned with
+			// NIB-M-PROVIDER-ADAPTERS. The global wallclock ceiling
+			// (maxTotalDurationMs, defaults to MAX_TOTAL_DURATION_MS = 2×TIMEOUT)
+			// caps retry divergence so a pathologically slow model can't loop.
 			if (isAbortError(err) && signal?.aborted) throw err;
 			if (!(err instanceof TransientLLMError)) {
 				lastError = new TransientLLMError(errorMessage(err));
@@ -170,6 +175,42 @@ export async function runWithRetry(
 	throw new FatalLLMError(
 		`Provider ${provider} failed after ${MAX_RETRIES} retries: ${errorMessage(lastError)}`,
 	);
+}
+
+// Per-provider wire-spec mapping of finish_reason enum values. Each adapter
+// declares the two terminal values at its call-site, keeping the wire contract
+// declarative and co-located with the fetch shape. DC-OPENAI §5 and
+// DC-GOOGLE-GEMINI §5 define the enums; both split into truncation (retriable
+// per spec — model may succeed on retry) and safety filter rejection (fatal —
+// the provider's safety layer will reject the same content on retry).
+export interface FinishReasonMapping {
+	readonly truncation: string;
+	readonly safety: string;
+}
+
+// Error message format is stable: `Provider <id> <kind> (finish_reason=<value>)`.
+// The `(finish_reason=<value>)` suffix is a log-correlation contract operators
+// may grep. Provider id is the canonical lowercase ProviderLongId so messages
+// stay consistent with runWithRetry's "Provider <id> ..." format.
+export function checkFinishReason(
+	provider: ProviderLongId,
+	reason: string | undefined,
+	mapping: FinishReasonMapping,
+): void {
+	// Wire responses sometimes omit finish_reason despite the schema. Treat as
+	// transient — a retry may bring back a complete response. Silent pass-through
+	// here would let runWithRetry's JSON.parse guard misattribute the failure.
+	if (!reason) {
+		throw new TransientLLMError(`Provider ${provider} response missing finish_reason`);
+	}
+	if (reason === mapping.truncation) {
+		throw new TransientLLMError(`Provider ${provider} output truncated (finish_reason=${reason})`);
+	}
+	if (reason === mapping.safety) {
+		throw new FatalLLMError(
+			`Provider ${provider} safety filter rejected content (finish_reason=${reason})`,
+		);
+	}
 }
 
 export function classifyHttp(status: number, bodyText: string): Error {

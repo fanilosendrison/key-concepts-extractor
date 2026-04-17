@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FatalLLMError, TransientLLMError } from "../src/domain/errors.js";
 import {
+	checkFinishReason,
 	composeSignal,
 	resolveEndpoint,
 	runWithRetry,
@@ -186,6 +187,57 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			// file-wide convention for other programmer-error cases.
 			expect(() => resolveEndpoint("openai", "")).toThrow(FatalLLMError);
 			expect(() => resolveEndpoint("openai", "")).toThrow(/must be a non-empty URL/);
+		});
+	});
+
+	describe("checkFinishReason", () => {
+		// Guards the wire-spec terminal mapping used by openai-adapter and
+		// google-adapter. The severity split (retriable truncation vs fatal
+		// safety) is load-bearing: a regression that inverts the two would
+		// either burn budget on unrecoverable refusals or give up on
+		// truncations a retry would fix.
+		const openaiMap = { truncation: "length", safety: "content_filter" } as const;
+		const geminiMap = { truncation: "MAX_TOKENS", safety: "SAFETY" } as const;
+
+		it("T-PS-16: truncation reason throws TransientLLMError for both providers", () => {
+			// Symmetric across providers so a regression that hardcodes either
+			// enum value in the helper (instead of reading from the mapping)
+			// fails the suite — the describe rationale guards against exactly
+			// that kind of inversion.
+			expect(() => checkFinishReason("openai", "length", openaiMap)).toThrow(TransientLLMError);
+			expect(() => checkFinishReason("openai", "length", openaiMap)).toThrow(
+				/output truncated \(finish_reason=length\)/,
+			);
+			expect(() => checkFinishReason("google", "MAX_TOKENS", geminiMap)).toThrow(TransientLLMError);
+			expect(() => checkFinishReason("google", "MAX_TOKENS", geminiMap)).toThrow(
+				/output truncated \(finish_reason=MAX_TOKENS\)/,
+			);
+		});
+
+		it("T-PS-17: safety reason throws FatalLLMError for both providers", () => {
+			expect(() => checkFinishReason("openai", "content_filter", openaiMap)).toThrow(FatalLLMError);
+			expect(() => checkFinishReason("google", "SAFETY", geminiMap)).toThrow(FatalLLMError);
+			// Wording must describe safety-FILTER rejection, not model refusal —
+			// Gemini's SAFETY is a post-hoc filter, not a model decline.
+			expect(() => checkFinishReason("google", "SAFETY", geminiMap)).toThrow(
+				/safety filter rejected content/,
+			);
+		});
+
+		it("T-PS-18: non-terminal reason (stop / STOP / OTHER) is a silent pass-through", () => {
+			expect(() => checkFinishReason("openai", "stop", openaiMap)).not.toThrow();
+			expect(() => checkFinishReason("google", "STOP", geminiMap)).not.toThrow();
+			expect(() => checkFinishReason("google", "OTHER", geminiMap)).not.toThrow();
+		});
+
+		it("T-PS-19: missing finish_reason throws TransientLLMError (malformed wire response)", () => {
+			// Wire may omit the field despite the schema. Silent pass-through
+			// would let runWithRetry misattribute the failure to JSON.parse.
+			expect(() => checkFinishReason("openai", undefined, openaiMap)).toThrow(TransientLLMError);
+			expect(() => checkFinishReason("openai", undefined, openaiMap)).toThrow(
+				/response missing finish_reason/,
+			);
+			expect(() => checkFinishReason("google", "", geminiMap)).toThrow(TransientLLMError);
 		});
 	});
 });
