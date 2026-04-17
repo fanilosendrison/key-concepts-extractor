@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { verifyCoverage } from "./domain/coverage-verifier.js";
 import { generateDiagnostics } from "./domain/diagnostics.js";
-import { FatalLLMError } from "./domain/errors.js";
+import { errorMessage, FatalLLMError } from "./domain/errors.js";
+import type { EventPayloads } from "./domain/event-schemas.js";
 import { runExtraction } from "./domain/extraction-orchestrator.js";
 import { fuseInterAngle } from "./domain/fusion-inter.js";
 import { fuseIntraAngle } from "./domain/fusion-intra.js";
@@ -24,6 +25,7 @@ import {
 	type TerminalEventType,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
+import { logger } from "./infra/logger.js";
 import { createRunManager, type RunManager } from "./infra/run-manager.js";
 
 export interface PipelineDeps {
@@ -63,7 +65,7 @@ export async function runPipeline(
 	const config = deps.config ?? DEFAULT_RUN_CONFIG;
 	// initRun is idempotent: safe whether the caller already initialized or not.
 	await runManager.initRun(config, deps.source ?? "cli");
-	const logger = createEventLogger(runManager.runDir);
+	const eventLogger = createEventLogger(runManager.runDir);
 
 	// Fire-and-forget: intermediate events tolerate loss on crash because
 	// the pipeline keeps emitting. Terminal events use emitTerminal below.
@@ -72,19 +74,31 @@ export async function runPipeline(
 		type: PipelineEventType,
 		payload: Record<string, unknown>,
 	) => {
-		void logger.emit({ phase, type, payload });
+		void eventLogger.emit({ phase, type, payload });
 	};
 
 	// Terminal events must reach subscribers before the CLI process exits.
-	// Swallowed on I/O failure so a failed flush can't shadow the run result.
+	// A failed flush can't shadow the run result, but we MUST surface the
+	// failure to the diagnostic log — otherwise an event-logger I/O error
+	// (disk full, fd leak) would leave the CLI exiting silently with a
+	// non-zero code and no message. The persisted run state is authoritative;
+	// the pino logger is the fallback channel when the subscriber path breaks.
 	const emitTerminal = async (
 		type: TerminalEventType,
 		payload: Record<string, unknown>,
 	): Promise<void> => {
 		try {
-			await logger.emit({ phase: "run", type, payload });
-		} catch {
-			// best-effort — the persisted run state is authoritative.
+			await eventLogger.emit({ phase: "run", type, payload });
+		} catch (err) {
+			// eventLogger.emit appendFile + dispatch to subscribers — a throw
+			// here means persistence (or serialization) failed and the
+			// subscriber path never fired. pino swallows its own I/O errors,
+			// so we don't need a secondary guard: the run state is
+			// authoritative, the log line is best-effort diagnostic.
+			logger.error(
+				{ type, err: errorMessage(err) },
+				"emit-terminal: event emission failed (subscribers not notified)",
+			);
 		}
 	};
 
@@ -92,7 +106,9 @@ export async function runPipeline(
 
 	const stopRunEarly = async (): Promise<PipelineResult> => {
 		await runManager.stopRun();
-		await emitTerminal("run_stopped", { reason: "user_requested" });
+		await emitTerminal("run_stopped", {
+			reason: "user_requested",
+		} satisfies EventPayloads["run_stopped"]);
 		return { runId: runManager.runId, status: "stopped" };
 	};
 
@@ -251,8 +267,8 @@ export async function runPipeline(
 		});
 		await emitTerminal("run_complete", {
 			total_concepts: coverage.concepts.length,
-			run_dir: runManager.runDir,
-		});
+			output_dir: runManager.runDir,
+		} satisfies EventPayloads["run_complete"]);
 
 		return { runId: runManager.runId, status: "completed" };
 	} catch (error) {
@@ -261,9 +277,9 @@ export async function runPipeline(
 		const isFatal = error instanceof FatalLLMError;
 		await runManager.failRun(error instanceof Error ? error : new Error(String(error)));
 		await emitTerminal("run_error", {
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			fatal: isFatal,
-		});
+		} satisfies EventPayloads["run_error"]);
 		return { runId: runManager.runId, status: "failed" };
 	}
 }

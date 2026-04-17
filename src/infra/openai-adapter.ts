@@ -1,13 +1,12 @@
-import { FatalLLMError, TransientLLMError } from "../domain/errors.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../domain/ports.js";
 import {
+	checkFinishReason,
 	classifyHttp,
 	composeSignal,
 	type ProviderAdapterConfig,
+	resolveEndpoint,
 	runWithRetry,
 } from "./provider-shared.js";
-
-const DEFAULT_ENDPOINT = "https://api.openai.com";
 
 interface OpenAIResponse {
 	choices: Array<{
@@ -17,7 +16,7 @@ interface OpenAIResponse {
 }
 
 export function createOpenAIAdapter(config: ProviderAdapterConfig): ProviderAdapter {
-	const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
+	const endpoint = resolveEndpoint("openai", config.endpoint);
 
 	return {
 		provider: "openai",
@@ -47,16 +46,14 @@ export function createOpenAIAdapter(config: ProviderAdapterConfig): ProviderAdap
 					const data = (await res.json()) as OpenAIResponse;
 					const choice = data.choices[0];
 					if (!choice) throw new Error("No choice in OpenAI response");
-					// DC-OPENAI §5: truncated output is retriable
-					if (choice.finish_reason === "length") {
-						throw new TransientLLMError("OpenAI output truncated (finish_reason=length)");
-					}
-					if (choice.finish_reason === "content_filter") {
-						throw new FatalLLMError("OpenAI refused content (finish_reason=content_filter)");
-					}
+					// DC-OPENAI §5: truncation retriable, content_filter fatal.
+					checkFinishReason("openai", choice.finish_reason, {
+						truncation: "length",
+						safety: "content_filter",
+					});
 					return choice.message.content;
 				},
-				request.signal,
+				{ signal: request.signal },
 			);
 			return {
 				content,

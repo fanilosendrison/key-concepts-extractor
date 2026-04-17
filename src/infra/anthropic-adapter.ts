@@ -3,10 +3,10 @@ import {
 	classifyHttp,
 	composeSignal,
 	type ProviderAdapterConfig,
+	resolveEndpoint,
 	runWithRetry,
 } from "./provider-shared.js";
 
-const DEFAULT_ENDPOINT = "https://api.anthropic.com";
 const API_VERSION = "2023-06-01";
 
 // Claude with extended thinking often wraps JSON in ```json ... ``` fences
@@ -28,7 +28,7 @@ interface AnthropicThinkingBlock {
 type AnthropicBlock = AnthropicTextBlock | AnthropicThinkingBlock;
 
 export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderAdapter {
-	const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
+	const endpoint = resolveEndpoint("anthropic", config.endpoint);
 
 	return {
 		provider: "anthropic",
@@ -62,7 +62,7 @@ export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderA
 					}
 					return stripJsonFence(textBlock.text);
 				},
-				request.signal,
+				{ signal: request.signal },
 			);
 			return {
 				content,

@@ -1,7 +1,6 @@
 // NIB-M-CLI §2.1 — `kce run --prompt "..." --files <path> ...`
 
 import { join } from "node:path";
-import type { PipelineEvent } from "../../domain/types.js";
 import { createAnthropicAdapter } from "../../infra/anthropic-adapter.js";
 import type { ResolvedStartupConfig } from "../../infra/config-loader.js";
 import { createEventLogger } from "../../infra/event-logger.js";
@@ -12,16 +11,12 @@ import { createOpenAIEmbeddingAdapter } from "../../infra/openai-embedding-adapt
 import { acquireRunLock } from "../../infra/run-lock.js";
 import { createRunManager } from "../../infra/run-manager.js";
 import { runPipeline } from "../../pipeline.js";
+// NIB-M-CLI §3.3 live event streaming — rendering lives in format-event.ts.
+import { formatEvent } from "../format-event.js";
 
 export interface RunCommandArgs {
 	prompt?: string;
 	files?: string[];
-}
-
-// NIB-M-CLI §3.3 + §5 : one line per event, horodated, structured stdout.
-function formatEvent(event: PipelineEvent): string {
-	const time = event.timestamp.slice(11, 23);
-	return `[${time}] ${event.phase} — ${event.type} ${JSON.stringify(event.payload)}`;
 }
 
 export async function runCommand(
@@ -41,8 +36,8 @@ export async function runCommand(
 	// Pre-create RunManager so we know runDir before runPipeline starts, and can
 	// subscribe to live events for stdout streaming (NIB-M-CLI §2.1).
 	const runManager = createRunManager(join(startup.baseDir, "runs"));
-	const logger = createEventLogger(runManager.runDir);
-	const unsubscribe = logger.subscribe((event) => {
+	const eventLogger = createEventLogger(runManager.runDir);
+	const unsubscribe = eventLogger.subscribe((event) => {
 		console.log(formatEvent(event));
 	});
 	console.log(`Run ${runManager.runId} — started`);
@@ -75,7 +70,9 @@ export async function runCommand(
 			signal: ctrl.signal,
 			source: "cli",
 		});
-		console.log(`Run ${result.runId} — ${result.status}`);
+		// Terminal status (completed/failed/stopped) reaches stdout via the
+		// `run_complete` / `run_error` / `run_stopped` events published by the
+		// pipeline and printed by the subscriber above. No duplicate human line.
 		// NIB-M-CLI §2.1: 0=success, 130=user interruption (Ctrl+C), 1=fatal.
 		if (result.status === "completed") return 0;
 		if (result.status === "stopped") return 130;

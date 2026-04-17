@@ -455,12 +455,13 @@ interface ServerConfig {
 - Timeout per call: 600s
 - Max retries: 3
 - Backoff sequence: [5000, 15000, 45000] ms
+- Max total wallclock per call: 1200s (2 × timeout) — bounds worst-case wait when retries only hit timeouts
 
 ---
 
 ## 4. Global invariants
 
-**INV-1 — Fail-closed on API failure.** Any API call that exhausts 3 retries is a fatal error. The pipeline stops. No partial fusion proceeds with missing data. A missing provider corrupts consensus scores.
+**INV-1 — Fail-closed on API failure.** Any API call that exhausts 3 retries or exceeds its total wallclock budget (1200s) is a fatal error. The pipeline stops. No partial fusion proceeds with missing data. A missing provider corrupts consensus scores.
 
 **INV-2 — Sequential angles, parallel providers.** Within Phase 2, angles are sequential. Within each angle, provider calls are parallel (max 3 concurrent). This invariant also holds for control phases.
 
@@ -484,7 +485,7 @@ interface ServerConfig {
 
 **P3 — All LLM outputs are strict JSON.** No markdown, no preamble, no commentary. Every LLM call includes this instruction. Response parsing must validate JSON and report parse errors as retriable failures.
 
-**P4 — Retry policy: uniform.** 600s timeout, 3 retries, backoff 5s/15s/45s. Applies to all API calls (extraction and controls). JSON parse failure counts as a retriable error.
+**P4 — Retry policy: uniform.** 600s timeout per attempt, 3 retries, backoff 5s/15s/45s, total wallclock ceiling 1200s per call. Applies to all API calls (extraction and controls). JSON parse failure counts as a retriable error. If the total wallclock budget is exceeded between attempts, the next retry is skipped and the call fails fatally.
 
 **P5 — Event emission via shared emitter.** All modules receive an `EventEmitter` at construction. Events are defined in Spec v1.5 §13. The emitter writes to events.jsonl AND forwards to WebSocket clients (if any).
 
