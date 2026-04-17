@@ -43,6 +43,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 	// persisted-failed-manifest hack previously used to satisfy T-WS-03 listing.
 	let activeRunId: string | null = null;
 	let activeRunPromise: Promise<void> | null = null;
+	let activeRunCtrl: AbortController | null = null;
 
 	// Per-run unsubscribe functions, keyed by ws context — torn down on close.
 	const wsUnsubs = new WeakMap<WSContext, () => void>();
@@ -91,8 +92,13 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 
 		// Fire-and-forget: the run continues asynchronously. `activeRunId` is cleared
 		// by the settler below regardless of outcome (completed / failed / stopped).
-		activeRunPromise = startRunAsync(rm, { prompt, files }).finally(() => {
-			if (activeRunId === rm.runId) activeRunId = null;
+		const ctrl = new AbortController();
+		activeRunCtrl = ctrl;
+		activeRunPromise = startRunAsync(rm, { prompt, files }, ctrl.signal).finally(() => {
+			if (activeRunId === rm.runId) {
+				activeRunId = null;
+				activeRunCtrl = null;
+			}
 			activeRunPromise = null;
 		});
 
@@ -106,6 +112,13 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 		if (!manifest) return c.json({ error: "Run not found" }, 404);
 		if (manifest.status !== "running") {
 			return c.json({ error: "Run is not active" }, 409);
+		}
+		// Abort the in-flight pipeline so LLM calls stop immediately, then mark
+		// the manifest as stopped. Without the abort, the pipeline continues
+		// making LLM calls against a manifest already marked "stopped".
+		if (activeRunCtrl && activeRunId === id) {
+			activeRunCtrl.abort();
+			activeRunCtrl = null;
 		}
 		const rm = createRunManager(runsDir, id);
 		await rm.stopRun();
@@ -176,6 +189,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 	async function startRunAsync(
 		rm: RunManager,
 		input: { prompt: string | undefined; files: InputFile[] },
+		signal?: AbortSignal,
 	): Promise<void> {
 		try {
 			await runPipeline(
@@ -191,6 +205,7 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 					baseDir: deps.baseDir,
 					runManager: rm,
 					source: "web",
+					signal,
 					...(deps.config ? { config: deps.config } : {}),
 				},
 			);
