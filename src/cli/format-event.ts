@@ -13,10 +13,10 @@ export function formatEvent(event: PipelineEvent): string {
 			return `[${time}] ✅ Complete — ${p.total_concepts ?? 0} concepts — ${p.run_dir ?? ""}`;
 		}
 		case "run_error": {
-			// NIB-M-CLI §3.3 only shows the "Fatal" wording for run_error; stay
-			// aligned even though the payload carries a `fatal` boolean — the
-			// CLI currently emits run_error only on fatal conditions anyway
-			// (pipeline.ts sets fatal from `error instanceof FatalLLMError`).
+			// §3.3 prescribes "Fatal" uniformly. The `fatal` boolean on the
+			// payload is consumed by WS/UI for surfacing intent, not by the
+			// CLI formatter — pipeline.ts can emit fatal:false for errors
+			// that escape the try but aren't FatalLLMError instances.
 			const p = event.payload as { error?: string };
 			return `[${time}] ❌ Fatal — ${p.error ?? "(no message)"}`;
 		}

@@ -1,4 +1,4 @@
-import { FatalLLMError, TransientLLMError } from "../domain/errors.js";
+import { errorMessage, FatalLLMError, TransientLLMError } from "../domain/errors.js";
 import type { ProviderLongId } from "../domain/types.js";
 
 export interface ProviderAdapterConfig {
@@ -129,14 +129,12 @@ export async function runWithRetry(
 			// External cancel (or per-attempt timeout) is terminal — do not burn retries on it.
 			if (isAbortError(err) && signal?.aborted) throw err;
 			if (!(err instanceof TransientLLMError)) {
-				lastError = new TransientLLMError(err instanceof Error ? err.message : String(err));
+				lastError = new TransientLLMError(errorMessage(err));
 			}
 		}
 	}
 	throw new FatalLLMError(
-		`Provider ${provider} failed after ${MAX_RETRIES} retries: ${
-			lastError instanceof Error ? lastError.message : String(lastError)
-		}`,
+		`Provider ${provider} failed after ${MAX_RETRIES} retries: ${errorMessage(lastError)}`,
 	);
 }
 

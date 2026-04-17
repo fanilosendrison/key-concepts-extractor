@@ -19,6 +19,14 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			expect(composed).toBeInstanceOf(AbortSignal);
 		});
 
+		it("T-PS-11: default timeoutMs (TIMEOUT_MS) is accepted by the guard", () => {
+			// Positive control for T-PS-10 — verifies the validation allows the
+			// nominal case. If TIMEOUT_MS ever becomes invalid per the guard,
+			// this test fails loudly instead of every production call breaking.
+			expect(() => composeSignal()).not.toThrow();
+			expect(() => composeSignal(undefined, 1)).not.toThrow();
+		});
+
 		it("T-PS-10: rejects NaN / ≤0 / ±Infinity / non-integer timeoutMs", () => {
 			// AbortSignal.timeout(0) fires immediately and floats get truncated
 			// via ToUint32 — 0.5 would silently become 0. Guard all invalid shapes.

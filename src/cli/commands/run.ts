@@ -11,6 +11,7 @@ import { createOpenAIEmbeddingAdapter } from "../../infra/openai-embedding-adapt
 import { acquireRunLock } from "../../infra/run-lock.js";
 import { createRunManager } from "../../infra/run-manager.js";
 import { runPipeline } from "../../pipeline.js";
+// NIB-M-CLI §3.3 live event streaming — rendering lives in format-event.ts.
 import { formatEvent } from "../format-event.js";
 
 export interface RunCommandArgs {

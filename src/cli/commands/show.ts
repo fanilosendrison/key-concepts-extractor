@@ -23,8 +23,15 @@ export async function showCommand(runId: string, baseDir: string): Promise<numbe
 	if (existsSync(eventsPath)) {
 		const raw = await readFile(eventsPath, "utf-8");
 		for (const line of raw.split("\n").filter(Boolean)) {
-			const ev = JSON.parse(line) as PipelineEvent;
-			console.log(formatEvent(ev));
+			// events.jsonl is appended non-atomically; a partial line from a
+			// SIGKILL'd pipeline is a realistic scenario precisely on the runs
+			// `show` is most useful for. Skip malformed lines rather than crash.
+			try {
+				const ev = JSON.parse(line) as PipelineEvent;
+				console.log(formatEvent(ev));
+			} catch {
+				console.error(`(malformed event skipped: ${line.slice(0, 80)})`);
+			}
 		}
 	} else {
 		console.log("(no events.jsonl)");

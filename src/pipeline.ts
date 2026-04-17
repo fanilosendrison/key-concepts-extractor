@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { verifyCoverage } from "./domain/coverage-verifier.js";
 import { generateDiagnostics } from "./domain/diagnostics.js";
-import { FatalLLMError } from "./domain/errors.js";
+import { errorMessage, FatalLLMError } from "./domain/errors.js";
 import { runExtraction } from "./domain/extraction-orchestrator.js";
 import { fuseInterAngle } from "./domain/fusion-inter.js";
 import { fuseIntraAngle } from "./domain/fusion-intra.js";
@@ -88,13 +88,18 @@ export async function runPipeline(
 		try {
 			await logger.emit({ phase: "run", type, payload });
 		} catch (err) {
-			// logger.emit persists to events.jsonl THEN dispatches to subscribers.
-			// Reaching the catch means persistence failed — the JSONL line is
-			// lost AND the subscriber path never fired. Flag both clearly.
-			const msg = err instanceof Error ? err.message : String(err);
-			console.error(
-				`[emit-terminal] event persistence failed for ${type} (subscribers not notified): ${msg}`,
-			);
+			// logger.emit appendFile + dispatch to subscribers — a throw here
+			// means persistence (or serialization) failed and the subscriber
+			// path never fired. Wrap console.error too: on a piped stderr
+			// whose reader died (EPIPE), a throw here would shadow the run
+			// result and leak as an unhandled rejection.
+			try {
+				console.error(
+					`[emit-terminal] event emission failed for ${type} (subscribers not notified): ${errorMessage(err)}`,
+				);
+			} catch {
+				// stderr closed or full — nothing left to do; run state is authoritative.
+			}
 		}
 	};
 
@@ -271,7 +276,7 @@ export async function runPipeline(
 		const isFatal = error instanceof FatalLLMError;
 		await runManager.failRun(error instanceof Error ? error : new Error(String(error)));
 		await emitTerminal("run_error", {
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			fatal: isFatal,
 		});
 		return { runId: runManager.runId, status: "failed" };

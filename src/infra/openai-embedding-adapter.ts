@@ -69,7 +69,7 @@ export function createOpenAIEmbeddingAdapter(cfg: OpenAIEmbeddingAdapterConfig):
 			const all: number[][] = [];
 			const startedAt = Date.now();
 			for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
-				if (i > 0 && Date.now() - startedAt >= MAX_OPERATION_DURATION_MS_EMBEDDING) {
+				if (Date.now() - startedAt >= MAX_OPERATION_DURATION_MS_EMBEDDING) {
 					throw new FatalLLMError(
 						`openai-embedding: operation exceeded ${MAX_OPERATION_DURATION_MS_EMBEDDING}ms wallclock after ${i} of ${texts.length} inputs`,
 					);
