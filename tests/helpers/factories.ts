@@ -39,7 +39,7 @@ export function finalConcept(overrides: Partial<FinalConcept> = {}): FinalConcep
 	return {
 		canonical_term: canonical,
 		category: "property",
-		granularity: "atomic",
+		granularity: "system-level",
 		explicit_in_source: true,
 		variants: [canonical],
 		angles_count: "1/5" as AnglesCount,
