@@ -1,4 +1,5 @@
 import { TransientLLMError } from "./errors.js";
+import type { EventPayloads } from "./event-schemas.js";
 import type { LLMRequest, ProviderAdapter } from "./ports.js";
 import {
 	type AngleId,
@@ -180,11 +181,14 @@ export async function runExtraction(
 		deps.emit?.("extraction_progress", {
 			completed: allPasses.length,
 			total: EXTRACTION_PASS_COUNT,
-		});
+		} satisfies EventPayloads["extraction_progress"]);
 
 		const anglePasses = await Promise.all(
 			PROVIDER_PAIRS.map(async ({ long, short }) => {
-				deps.emit?.("extraction_start", { angle, model: short });
+				deps.emit?.("extraction_start", {
+					angle,
+					model: short,
+				} satisfies EventPayloads["extraction_start"]);
 				const request = buildExtractionRequest(context, angle, long, deps.signal);
 				const adapter = deps.adapters[long];
 				const response = await adapter.call(request);
@@ -196,14 +200,14 @@ export async function runExtraction(
 						concepts_valid: concepts.length,
 						concepts_dropped: dropped.length,
 						samples: dropped.slice(0, 3),
-					});
+					} satisfies EventPayloads["concept_dropped"]);
 				}
 				deps.emit?.("extraction_complete", {
 					angle,
 					model: short,
 					concepts_count: concepts.length,
 					concepts_dropped: dropped.length,
-				});
+				} satisfies EventPayloads["extraction_complete"]);
 				const pass: ExtractionPass = { angle, provider: short, concepts };
 				if (deps.onPass) await deps.onPass(pass);
 				return pass;
@@ -215,6 +219,6 @@ export async function runExtraction(
 	deps.emit?.("extraction_progress", {
 		completed: EXTRACTION_PASS_COUNT,
 		total: EXTRACTION_PASS_COUNT,
-	});
+	} satisfies EventPayloads["extraction_progress"]);
 	return allPasses;
 }

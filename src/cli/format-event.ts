@@ -13,8 +13,14 @@
 //     payload-shape mismatch AND logs a pino warn. The fallback keeps output
 //     visible; the warn surfaces the drift so an operator diagnosing broken
 //     display knows the emitter and schema disagree.
+//
+// Payload schemas themselves live in domain/event-schemas.ts so the emitter
+// side (pipeline.ts, extraction-orchestrator.ts) can `satisfies` the same
+// types at compile time — historical drift (`fatal`, `concepts_dropped`)
+// motivated the split from this file.
 
 import { z } from "zod";
+import { EVENT_PAYLOAD_SCHEMAS } from "../domain/event-schemas.js";
 import { PIPELINE_EVENT_TYPES, PIPELINE_PHASES, type PipelineEvent } from "../domain/types.js";
 import { logger } from "../infra/logger.js";
 
@@ -50,58 +56,11 @@ export function parseEventLine(line: string): PipelineEvent | null {
 	return parsed.success ? parsed.data : null;
 }
 
-const RunCompletePayload = z.object({
-	total_concepts: z.number(),
-	output_dir: z.string(),
-});
-
-const RunErrorPayload = z.object({
-	error: z.string(),
-	// pipeline.ts emits `fatal: boolean` alongside `error`. The CLI formatter
-	// renders "Fatal" uniformly per §3.3 and ignores it. The schema is currently
-	// lax (zod accepts extra keys by default), so declaring `fatal` here is
-	// forward-looking documentation — it locks the wire contract for a future
-	// `.strict()` migration, not today.
-	fatal: z.boolean().optional(),
-});
-
-const RunStoppedPayload = z.object({
-	reason: z.string(),
-});
-
-const ExtractionStartPayload = z.object({
-	angle: z.string(),
-	model: z.string(),
-});
-
-const ExtractionCompletePayload = z.object({
-	angle: z.string(),
-	model: z.string(),
-	concepts_count: z.number(),
-	// extraction-orchestrator emits `concepts_dropped` (raw count rejected by
-	// the schema before they reach `concepts_count`). Declared optional to
-	// mirror the wire shape; like `fatal` above, this is forward-looking
-	// documentation for a future `.strict()` migration, not runtime enforcement.
-	concepts_dropped: z.number().optional(),
-});
-
-const ExtractionProgressPayload = z.object({
-	completed: z.number(),
-	total: z.number(),
-});
-
-const ControlStartPayload = z.object({
-	control: z.enum(["quality", "relevance"]),
-	round: z.number(),
-	model: z.string(),
-	scope: z.string(),
-});
-
 export function formatEvent(event: PipelineEvent): string {
 	const time = event.timestamp.slice(11, 23);
 	switch (event.type) {
 		case "run_complete": {
-			const p = RunCompletePayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.run_complete.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] ✅ Complete — ${p.data.total_concepts} concepts — ${p.data.output_dir}`;
 		}
@@ -110,32 +69,32 @@ export function formatEvent(event: PipelineEvent): string {
 			// payload is consumed by WS/UI for surfacing intent, not by the
 			// CLI formatter — pipeline.ts can emit fatal:false for errors
 			// that escape the try but aren't FatalLLMError instances.
-			const p = RunErrorPayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.run_error.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] ❌ Fatal — ${p.data.error}`;
 		}
 		case "run_stopped": {
-			const p = RunStoppedPayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.run_stopped.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] 🛑 Stopped — ${p.data.reason}`;
 		}
 		case "extraction_start": {
-			const p = ExtractionStartPayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.extraction_start.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] Extraction — ${p.data.angle} / ${p.data.model} — started`;
 		}
 		case "extraction_complete": {
-			const p = ExtractionCompletePayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.extraction_complete.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] Extraction — ${p.data.angle} / ${p.data.model} — ${p.data.concepts_count} concepts`;
 		}
 		case "extraction_progress": {
-			const p = ExtractionProgressPayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.extraction_progress.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			return `[${time}] Extraction — ${p.data.completed}/${p.data.total} passes`;
 		}
 		case "control_start": {
-			const p = ControlStartPayload.safeParse(event.payload);
+			const p = EVENT_PAYLOAD_SCHEMAS.control_start.safeParse(event.payload);
 			if (!p.success) return warnAndFallback(time, event, p.error.issues);
 			const label = p.data.control === "quality" ? "Quality control" : "Relevance control";
 			return `[${time}] ${label} — ${p.data.scope} — R${p.data.round} ${p.data.model}`;
@@ -145,9 +104,9 @@ export function formatEvent(event: PipelineEvent): string {
 			// signal possible. Generic form is the final line of defence.
 			// Known types INTENTIONALLY routed through this branch (no bespoke
 			// formatter, observability via the generic JSON shape):
-			//   - concept_dropped (extraction-orchestrator.ts) — structured
-			//     telemetry, not user-facing. Add a case if a specific prefix
-			//     ever becomes part of NIB-M-CLI §3.3.
+			//   - concept_dropped — typed in event-schemas.ts for emitter-side
+			//     `satisfies` checks, but no prescribed §3.3 wording so the
+			//     generic JSON rendering is the user-facing form.
 			return genericForm(time, event);
 	}
 }

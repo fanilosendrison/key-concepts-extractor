@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { verifyCoverage } from "./domain/coverage-verifier.js";
 import { generateDiagnostics } from "./domain/diagnostics.js";
 import { errorMessage, FatalLLMError } from "./domain/errors.js";
+import type { EventPayloads } from "./domain/event-schemas.js";
 import { runExtraction } from "./domain/extraction-orchestrator.js";
 import { fuseInterAngle } from "./domain/fusion-inter.js";
 import { fuseIntraAngle } from "./domain/fusion-intra.js";
@@ -105,7 +106,9 @@ export async function runPipeline(
 
 	const stopRunEarly = async (): Promise<PipelineResult> => {
 		await runManager.stopRun();
-		await emitTerminal("run_stopped", { reason: "user_requested" });
+		await emitTerminal("run_stopped", {
+			reason: "user_requested",
+		} satisfies EventPayloads["run_stopped"]);
 		return { runId: runManager.runId, status: "stopped" };
 	};
 
@@ -265,7 +268,7 @@ export async function runPipeline(
 		await emitTerminal("run_complete", {
 			total_concepts: coverage.concepts.length,
 			output_dir: runManager.runDir,
-		});
+		} satisfies EventPayloads["run_complete"]);
 
 		return { runId: runManager.runId, status: "completed" };
 	} catch (error) {
@@ -276,7 +279,7 @@ export async function runPipeline(
 		await emitTerminal("run_error", {
 			error: errorMessage(error),
 			fatal: isFatal,
-		});
+		} satisfies EventPayloads["run_error"]);
 		return { runId: runManager.runId, status: "failed" };
 	}
 }

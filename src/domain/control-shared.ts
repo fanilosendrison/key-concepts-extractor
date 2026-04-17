@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { fillTemplate } from "./collection-utils.js";
+import type { EventPayloads } from "./event-schemas.js";
 import type { ProviderAdapter } from "./ports.js";
 import type { ControllableConcept, ControlScope, PipelineEventType } from "./types.js";
 
@@ -31,7 +32,12 @@ interface CallRoundParams<O> {
 }
 
 export async function callLLMRound<O>(p: CallRoundParams<O>): Promise<O> {
-	p.emit("control_start", { control: p.control, round: p.round, model: p.model, scope: p.scope });
+	p.emit("control_start", {
+		control: p.control,
+		round: p.round,
+		model: p.model,
+		scope: p.scope,
+	} satisfies EventPayloads["control_start"]);
 	const response = await p.adapter.call({
 		systemPrompt: p.systemPrompt,
 		userPrompt: fillTemplate(p.userPromptTemplate, p.templateVars),
