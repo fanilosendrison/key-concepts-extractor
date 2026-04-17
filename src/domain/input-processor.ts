@@ -28,7 +28,7 @@ function validate(args: InputProcessorArgs): void {
 	if (!hasPrompt && !hasFiles) {
 		throw new ValidationError("At least one of prompt or files must be provided");
 	}
-	if (hasPrompt && args.prompt!.trim().length === 0) {
+	if (hasPrompt && args.prompt?.trim().length === 0) {
 		throw new ValidationError("Prompt cannot be empty when provided");
 	}
 	for (const file of args.files ?? []) {
