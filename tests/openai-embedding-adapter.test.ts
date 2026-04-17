@@ -231,7 +231,7 @@ describe("createOpenAIEmbeddingAdapter (DC-OPENAI-EMBEDDINGS)", () => {
 		const ctrl = new AbortController();
 		// Mock fetch to honor the signal: reject with AbortError when aborted.
 		globalThis.fetch = vi.fn(
-			(_url: RequestInfo | URL, init?: RequestInit) =>
+			(_url: string | URL, init?: RequestInit) =>
 				new Promise((_resolve, reject) => {
 					init?.signal?.addEventListener("abort", () => {
 						reject(new DOMException("aborted", "AbortError"));
