@@ -35,24 +35,31 @@ export function resolveEndpoint(provider: ProviderLongId, override?: string): st
 }
 
 // Config-value guards. Fatal on failure — it's a programmer error and no
-// retry can un-break a bad config value. Both use the convention
+// retry can un-break a bad config value. All use the convention
 // `assertFoo("fnName: paramName", value)` so the thrown message carries the
-// origin and the field name together.
+// origin and the field name together. The shared `assertNumberMs` funnels
+// the throw so adding a third guard is one line and stays on-convention.
+function assertNumberMs(
+	name: string,
+	value: number,
+	isValid: (n: number) => boolean,
+	constraint: string,
+): void {
+	if (!isValid(value)) {
+		throw new FatalLLMError(`${name} must be ${constraint}, got ${value}`);
+	}
+}
 
 // Reject NaN / Infinity / non-positive / non-integer. AbortSignal.timeout
 // truncates floats via ToUint32, so 0.5 silently becomes 0 (already-aborted).
 function assertPositiveIntegerMs(name: string, value: number): void {
-	if (!Number.isInteger(value) || value <= 0) {
-		throw new FatalLLMError(`${name} must be a positive integer, got ${value}`);
-	}
+	assertNumberMs(name, value, (n) => Number.isInteger(n) && n > 0, "a positive integer");
 }
 
 // Reject NaN / Infinity / negative. Zero IS allowed (used by T-PS-07 to force
 // an immediate budget trip on attempt > 0).
 function assertNonNegativeFiniteMs(name: string, value: number): void {
-	if (!Number.isFinite(value) || value < 0) {
-		throw new FatalLLMError(`${name} must be a non-negative finite number, got ${value}`);
-	}
+	assertNumberMs(name, value, (n) => Number.isFinite(n) && n >= 0, "a non-negative finite number");
 }
 
 export const TIMEOUT_MS = 600_000;
@@ -104,7 +111,7 @@ export function composeSignal(external?: AbortSignal, timeoutMs: number = TIMEOU
 	return external ? AbortSignal.any([timeout, external]) : timeout;
 }
 
-export function isNonRetriableHttpStatus(status: number): boolean {
+function isNonRetriableHttpStatus(status: number): boolean {
 	return status === 400 || status === 401 || status === 403 || status === 404;
 }
 
@@ -183,9 +190,13 @@ export async function runWithRetry(
 // DC-GOOGLE-GEMINI §5 define the enums; both split into truncation (retriable
 // per spec — model may succeed on retry) and safety filter rejection (fatal —
 // the provider's safety layer will reject the same content on retry).
-export interface FinishReasonMapping {
-	readonly truncation: string;
-	readonly safety: string;
+// Generic so adapters can opt into compile-time typo protection on mapping
+// values by parameterising with their wire-spec enum (e.g. via `satisfies
+// FinishReasonMapping<GeminiFinishReason>` at the call site). Default `string`
+// preserves the loose behaviour for adapters that still type reason as string.
+export interface FinishReasonMapping<T extends string = string> {
+	readonly truncation: T;
+	readonly safety: T;
 }
 
 // Error message format is stable: `Provider <id> <kind> (finish_reason=<value>)`.

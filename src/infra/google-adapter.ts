@@ -3,6 +3,7 @@ import {
 	checkFinishReason,
 	classifyHttp,
 	composeSignal,
+	type FinishReasonMapping,
 	type ProviderAdapterConfig,
 	resolveEndpoint,
 	runWithRetry,
@@ -12,10 +13,13 @@ interface GeminiPart {
 	text: string;
 	thought?: boolean;
 }
+// DC-GOOGLE-GEMINI §1.2 — finishReason enum. Narrowed to the wire-spec union
+// so a typo in the mapping passed to checkFinishReason fails at compile time.
+type GeminiFinishReason = "STOP" | "MAX_TOKENS" | "SAFETY" | "OTHER";
 interface GeminiResponse {
 	candidates: Array<{
 		content: { parts: GeminiPart[]; role: "model" };
-		finishReason: string;
+		finishReason: GeminiFinishReason;
 	}>;
 }
 
@@ -49,10 +53,12 @@ export function createGoogleAdapter(config: ProviderAdapterConfig): ProviderAdap
 					const candidate = data.candidates[0];
 					if (!candidate) throw new Error("No candidate in Gemini response");
 					// DC-GOOGLE-GEMINI §5: truncation retriable, safety block fatal.
+					// `satisfies` with the narrow union catches typos (e.g. "MAX_TOKEN")
+					// at compile time without forcing callsites elsewhere to narrow.
 					checkFinishReason("google", candidate.finishReason, {
 						truncation: "MAX_TOKENS",
 						safety: "SAFETY",
-					});
+					} satisfies FinishReasonMapping<GeminiFinishReason>);
 					const contentParts = candidate.content.parts.filter((p) => !p.thought);
 					return contentParts.map((p) => p.text).join("");
 				},
