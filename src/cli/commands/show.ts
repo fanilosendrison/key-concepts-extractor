@@ -44,7 +44,10 @@ export async function showCommand(runId: string, baseDir: string): Promise<numbe
 				// The control-char range is the entire point of the substitution,
 				// so silence biome's noControlCharactersInRegex here.
 				// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional scrub of control bytes from preview
-				const preview = line.slice(0, 80).replace(/[\x00-\x1f\x7f-\x9f]/g, "?");
+				const preview = line
+					.slice(0, 80)
+					.replace(/[\x00-\x1f\x7f-\x9f]/g, "?")
+					.replace(/[\uD800-\uDBFF]$/, "");
 				console.error(`(malformed event skipped: ${preview})`);
 				continue;
 			}

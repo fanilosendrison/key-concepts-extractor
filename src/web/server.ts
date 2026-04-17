@@ -123,7 +123,11 @@ export function createWebServer(deps: WebServerDeps): WebServer {
 		const rm = createRunManager(runsDir, id);
 		await rm.stopRun();
 		if (activeRunId === id) activeRunId = null;
-		return c.json({ status: "stopped" }, 200);
+		// Re-read manifest: if the run finalized between the listRuns snapshot
+		// and stopRun(), isTerminal makes stopRun a no-op, so report the actual
+		// resulting status rather than a misleading "stopped".
+		const finalManifest = await rm.getManifest();
+		return c.json({ status: finalManifest.status }, 200);
 	});
 
 	app.get("/api/runs", async (c) => {
