@@ -4,10 +4,9 @@ import {
 	classifyHttp,
 	composeSignal,
 	type ProviderAdapterConfig,
+	resolveEndpoint,
 	runWithRetry,
 } from "./provider-shared.js";
-
-const DEFAULT_ENDPOINT = "https://generativelanguage.googleapis.com";
 
 interface GeminiPart {
 	text: string;
@@ -21,7 +20,7 @@ interface GeminiResponse {
 }
 
 export function createGoogleAdapter(config: ProviderAdapterConfig): ProviderAdapter {
-	const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
+	const endpoint = resolveEndpoint("google", config.endpoint);
 
 	return {
 		provider: "google",

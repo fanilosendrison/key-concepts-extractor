@@ -303,7 +303,9 @@ describe("parseEventLine (NIB-M-CLI §2.3 replay guard)", () => {
 	// Each envelope field has its own validator (z.string / z.enum / z.record) —
 	// cover all four so a regression that swaps any of them for a coerced
 	// variant (e.g. z.coerce.string) fails the suite rather than silently
-	// coerce.
+	// coerce. Timestamp cases ALSO lock the Z-only ISO-8601 contract
+	// (NIB-M-EVENT-LOGGER §3.1) — a revert of `z.iso.datetime()` to
+	// `z.string()` would let the non-ISO rows through and break the suite.
 	it.each([
 		[
 			"phase is not a string",
@@ -316,6 +318,23 @@ describe("parseEventLine (NIB-M-CLI §2.3 replay guard)", () => {
 		[
 			"timestamp is not a string",
 			{ timestamp: 123, phase: "run", type: "run_complete", payload: {} },
+		],
+		[
+			"timestamp is an empty string",
+			{ timestamp: "", phase: "run", type: "run_complete", payload: {} },
+		],
+		[
+			"timestamp is not ISO-8601",
+			{
+				timestamp: "2026-04-17 14:47:11",
+				phase: "run",
+				type: "run_complete",
+				payload: {},
+			},
+		],
+		[
+			"timestamp is garbage",
+			{ timestamp: "not-a-timestamp", phase: "run", type: "run_complete", payload: {} },
 		],
 		[
 			"payload is not an object",

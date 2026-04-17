@@ -4,10 +4,9 @@ import {
 	classifyHttp,
 	composeSignal,
 	type ProviderAdapterConfig,
+	resolveEndpoint,
 	runWithRetry,
 } from "./provider-shared.js";
-
-const DEFAULT_ENDPOINT = "https://api.openai.com";
 
 interface OpenAIResponse {
 	choices: Array<{
@@ -17,7 +16,7 @@ interface OpenAIResponse {
 }
 
 export function createOpenAIAdapter(config: ProviderAdapterConfig): ProviderAdapter {
-	const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
+	const endpoint = resolveEndpoint("openai", config.endpoint);
 
 	return {
 		provider: "openai",

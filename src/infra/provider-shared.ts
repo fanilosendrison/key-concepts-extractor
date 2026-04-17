@@ -7,6 +7,54 @@ export interface ProviderAdapterConfig {
 	endpoint?: string;
 }
 
+// Centralised wire endpoints per provider. Values are normative per
+// NIB-S-KCE §config-defaults and the DC-* specs (DC-ANTHROPIC §0,
+// DC-OPENAI §0, DC-OPENAI-EMBEDDINGS §0, DC-GOOGLE-GEMINI §0). Adapters
+// override only when the caller injects a custom base URL (e.g. a mock
+// server in tests). Keeping the table here makes a future endpoint
+// rotation a one-line change instead of a four-file scatter, and ties
+// the URL to the same ProviderLongId enum used throughout the pipeline.
+// Module-local on purpose: callers go through `resolveEndpoint`, which
+// also guards against the empty-string foot-gun below.
+const DEFAULT_ENDPOINTS: Record<ProviderLongId, string> = {
+	anthropic: "https://api.anthropic.com",
+	openai: "https://api.openai.com",
+	google: "https://generativelanguage.googleapis.com",
+};
+
+export function resolveEndpoint(provider: ProviderLongId, override?: string): string {
+	// Empty string is a config bug, not an intent-to-override. Passing it
+	// through would produce a relative URL at the fetch layer with an opaque
+	// "Invalid URL" instead of the spec-aligned fatal we emit elsewhere.
+	if (override !== undefined && override.length === 0) {
+		throw new FatalLLMError(
+			`resolveEndpoint: endpoint override for ${provider} must be a non-empty URL, got ""`,
+		);
+	}
+	return override ?? DEFAULT_ENDPOINTS[provider];
+}
+
+// Config-value guards. Fatal on failure — it's a programmer error and no
+// retry can un-break a bad config value. Both use the convention
+// `assertFoo("fnName: paramName", value)` so the thrown message carries the
+// origin and the field name together.
+
+// Reject NaN / Infinity / non-positive / non-integer. AbortSignal.timeout
+// truncates floats via ToUint32, so 0.5 silently becomes 0 (already-aborted).
+function assertPositiveIntegerMs(name: string, value: number): void {
+	if (!Number.isInteger(value) || value <= 0) {
+		throw new FatalLLMError(`${name} must be a positive integer, got ${value}`);
+	}
+}
+
+// Reject NaN / Infinity / negative. Zero IS allowed (used by T-PS-07 to force
+// an immediate budget trip on attempt > 0).
+function assertNonNegativeFiniteMs(name: string, value: number): void {
+	if (!Number.isFinite(value) || value < 0) {
+		throw new FatalLLMError(`${name} must be a non-negative finite number, got ${value}`);
+	}
+}
+
 export const TIMEOUT_MS = 600_000;
 // Embeddings are a single fast call (1-3s typical for batches up to 100
 // texts, which is the per-request cap set by DC-OPENAI-EMBEDDINGS §5).
@@ -51,14 +99,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // with different latency profiles (embeddings vs. generative LLMs) to pick
 // a bound proportional to expected duration rather than inheriting 600s.
 export function composeSignal(external?: AbortSignal, timeoutMs: number = TIMEOUT_MS): AbortSignal {
-	// Reject NaN / Infinity / non-positive / non-integer. AbortSignal.timeout
-	// truncates floats via ToUint32, so 0.5 silently becomes 0 (already-aborted).
-	// Fatal because it's a programmer error; retry cannot un-break a bad config.
-	if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
-		throw new FatalLLMError(
-			`composeSignal: timeoutMs must be a positive integer, got ${timeoutMs}`,
-		);
-	}
+	assertPositiveIntegerMs("composeSignal: timeoutMs", timeoutMs);
 	const timeout = AbortSignal.timeout(timeoutMs);
 	return external ? AbortSignal.any([timeout, external]) : timeout;
 }
@@ -87,14 +128,7 @@ export async function runWithRetry(
 ): Promise<{ content: string; latencyMs: number }> {
 	const { signal } = options;
 	const maxTotalDurationMs = options.maxTotalDurationMs ?? MAX_TOTAL_DURATION_MS;
-	// Reject NaN / Infinity / negative up front — silently clamping would hide
-	// configuration bugs and produce nonsense messages downstream. Fatal because
-	// it's a programmer error: no retry will un-break a bad config value.
-	if (!Number.isFinite(maxTotalDurationMs) || maxTotalDurationMs < 0) {
-		throw new FatalLLMError(
-			`runWithRetry: maxTotalDurationMs must be a non-negative finite number, got ${maxTotalDurationMs}`,
-		);
-	}
+	assertNonNegativeFiniteMs("runWithRetry: maxTotalDurationMs", maxTotalDurationMs);
 	let lastError: unknown;
 	const startedAt = Date.now();
 	// The budget only gates retries (attempt > 0). The first attempt always

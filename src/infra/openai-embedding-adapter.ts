@@ -5,11 +5,11 @@ import {
 	composeSignal,
 	MAX_OPERATION_DURATION_MS_EMBEDDING,
 	MAX_TOTAL_DURATION_MS_EMBEDDING,
+	resolveEndpoint,
 	runWithRetry,
 	TIMEOUT_MS_EMBEDDING,
 } from "./provider-shared.js";
 
-const DEFAULT_ENDPOINT = "https://api.openai.com";
 // DC-OPENAI-EMBEDDINGS §5: max 100 texts per request, batch internally if more.
 const EMBEDDING_BATCH_SIZE = 100;
 
@@ -24,7 +24,7 @@ interface EmbeddingResponse {
 }
 
 export function createOpenAIEmbeddingAdapter(cfg: OpenAIEmbeddingAdapterConfig): EmbeddingAdapter {
-	const endpoint = cfg.endpoint ?? DEFAULT_ENDPOINT;
+	const endpoint = resolveEndpoint("openai", cfg.endpoint);
 
 	async function embedBatch(batch: string[], signal?: AbortSignal): Promise<number[][]> {
 		const { content } = await runWithRetry(

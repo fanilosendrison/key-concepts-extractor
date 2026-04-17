@@ -179,6 +179,50 @@ describe("createOpenAIEmbeddingAdapter (DC-OPENAI-EMBEDDINGS)", () => {
 		}
 	});
 
+	it("T-EMB-09: a fatal failure on batch N rejects embed() without returning partial vectors", async () => {
+		// All-or-nothing semantics: when batch 2 fails fatally, the partial
+		// `all` accumulated from batch 1 must NOT leak to the caller. The
+		// stack-unwind on throw discards it — this test locks that invariant
+		// so a future "preserve partial results" refactor can't slip past
+		// without an explicit test break and decision.
+		let callIndex = 0;
+		globalThis.fetch = vi.fn(async (_url, init) => {
+			callIndex += 1;
+			const body = JSON.parse((init as RequestInit).body as string);
+			const items = (body.input as string[]).map((_t, idx) => ({
+				index: idx,
+				embedding: [idx],
+			}));
+			if (callIndex === 2) {
+				// 400 maps to FatalLLMError via classifyHttp — non-retriable.
+				return new Response("bad request", { status: 400 });
+			}
+			return new Response(JSON.stringify({ data: items }), { status: 200 });
+		}) as typeof fetch;
+
+		const adapter = createOpenAIEmbeddingAdapter({
+			apiKey: "sk-test",
+			model: "text-embedding-3-small",
+		});
+		// 150 inputs → 2 batches (100 + 50). Batch 2 trips fatal.
+		const inputs = Array.from({ length: 150 }, (_, i) => `t${i}`);
+		// Sentinel proves "nothing was returned" directly — if a future refactor
+		// caught the fatal and returned the partial batch-1 vectors, `out`
+		// would change and the assertion would fail. `rejects.toThrow` alone
+		// would also catch it (promise resolves instead of rejects), but the
+		// explicit sentinel matches the title of the test verbatim.
+		let out: unknown = "unset";
+		await expect(
+			(async () => {
+				out = await adapter.embed(inputs);
+			})(),
+		).rejects.toThrow(/HTTP 400/);
+		expect(out).toBe("unset");
+		// Exactly 2 calls — batch 1 succeeded, batch 2 was the fatal one. No
+		// retry on a 400 (non-retriable), no batch 3.
+		expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+	});
+
 	it("T-EMB-03: aborts in-flight request when caller signal aborts", async () => {
 		const adapter = createOpenAIEmbeddingAdapter({
 			apiKey: "sk-test",

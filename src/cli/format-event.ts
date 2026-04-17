@@ -22,8 +22,15 @@ import { logger } from "../infra/logger.js";
 // re-use the domain `as const` tuples so a new phase or event type added to
 // domain/types.ts automatically flows into this schema — no silent drift
 // where valid events get dropped as "(malformed event skipped)".
+// `timestamp` uses `z.iso.datetime()` which in zod v4 accepts Z-suffixed UTC
+// ISO-8601 with millisecond precision — exactly what NIB-M-EVENT-LOGGER §3.1
+// prescribes and what `new Date().toISOString()` (event-logger.ts) emits.
+// Non-Z offsets (`+02:00`) are REJECTED by design; the constraint is
+// deliberate, not accidental. A non-ISO replay value (empty string, garbage)
+// is rejected at parseEventLine instead of producing a corrupt slice(11, 23)
+// downstream in formatEvent.
 const PipelineEventSchema = z.object({
-	timestamp: z.string(),
+	timestamp: z.iso.datetime(),
 	phase: z.enum(PIPELINE_PHASES),
 	type: z.enum(PIPELINE_EVENT_TYPES),
 	payload: z.record(z.string(), z.unknown()),
@@ -50,6 +57,12 @@ const RunCompletePayload = z.object({
 
 const RunErrorPayload = z.object({
 	error: z.string(),
+	// pipeline.ts emits `fatal: boolean` alongside `error`. The CLI formatter
+	// renders "Fatal" uniformly per §3.3 and ignores it. The schema is currently
+	// lax (zod accepts extra keys by default), so declaring `fatal` here is
+	// forward-looking documentation — it locks the wire contract for a future
+	// `.strict()` migration, not today.
+	fatal: z.boolean().optional(),
 });
 
 const RunStoppedPayload = z.object({
@@ -65,6 +78,11 @@ const ExtractionCompletePayload = z.object({
 	angle: z.string(),
 	model: z.string(),
 	concepts_count: z.number(),
+	// extraction-orchestrator emits `concepts_dropped` (raw count rejected by
+	// the schema before they reach `concepts_count`). Declared optional to
+	// mirror the wire shape; like `fatal` above, this is forward-looking
+	// documentation for a future `.strict()` migration, not runtime enforcement.
+	concepts_dropped: z.number().optional(),
 });
 
 const ExtractionProgressPayload = z.object({
@@ -125,6 +143,11 @@ export function formatEvent(event: PipelineEvent): string {
 		default:
 			// Unknown event type — no schema to validate against, so no drift
 			// signal possible. Generic form is the final line of defence.
+			// Known types INTENTIONALLY routed through this branch (no bespoke
+			// formatter, observability via the generic JSON shape):
+			//   - concept_dropped (extraction-orchestrator.ts) — structured
+			//     telemetry, not user-facing. Add a case if a specific prefix
+			//     ever becomes part of NIB-M-CLI §3.3.
 			return genericForm(time, event);
 	}
 }

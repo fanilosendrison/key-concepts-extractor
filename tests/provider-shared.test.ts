@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { TransientLLMError } from "../src/domain/errors.js";
-import { composeSignal, runWithRetry, sleep } from "../src/infra/provider-shared.js";
+import { describe, expect, it, vi } from "vitest";
+import { FatalLLMError, TransientLLMError } from "../src/domain/errors.js";
+import {
+	composeSignal,
+	resolveEndpoint,
+	runWithRetry,
+	sleep,
+} from "../src/infra/provider-shared.js";
 
 describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 	describe("composeSignal", () => {
@@ -25,6 +30,23 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 			// this test fails loudly instead of every production call breaking.
 			expect(() => composeSignal()).not.toThrow();
 			expect(() => composeSignal(undefined, 1)).not.toThrow();
+		});
+
+		it("T-PS-12: short valid timeoutMs actually fires, aborting with TimeoutError", async () => {
+			// T-PS-10 covers invalid timeouts; T-PS-11 covers the default case.
+			// Neither exercises a SHORT VALID timeout end-to-end. Without this,
+			// a future regression (e.g. composeSignal silently swallowing the
+			// timeout signal in the AbortSignal.any composition) would slip
+			// through the suite. Use vi.waitFor instead of a fixed setTimeout
+			// because Node's timer resolution can reach 4-16ms on macOS under
+			// load — a hardcoded slack would flake on busy CI.
+			const composed = composeSignal(undefined, 10);
+			expect(composed.aborted).toBe(false);
+			await vi.waitFor(() => expect(composed.aborted).toBe(true), {
+				timeout: 1000,
+				interval: 5,
+			});
+			expect((composed.reason as Error | undefined)?.name).toBe("TimeoutError");
 		});
 
 		it("T-PS-10: rejects NaN / ≤0 / ±Infinity / non-integer timeoutMs", () => {
@@ -139,6 +161,31 @@ describe("provider-shared cancellation (NIB-M-PROVIDER-ADAPTERS)", () => {
 				).rejects.toThrow(/must be a non-negative finite number/);
 				expect(calls).toBe(0);
 			}
+		});
+	});
+
+	describe("resolveEndpoint", () => {
+		// These literals are load-bearing per NIB-S-KCE §config-defaults +
+		// the DC-* wire contracts. A typo in provider-shared.ts would ship
+		// silently until an integration call fails — lock them here.
+		it.each([
+			["anthropic" as const, "https://api.anthropic.com"],
+			["openai" as const, "https://api.openai.com"],
+			["google" as const, "https://generativelanguage.googleapis.com"],
+		])("T-PS-13: default endpoint for %s matches the normative URL", (provider, url) => {
+			expect(resolveEndpoint(provider)).toBe(url);
+		});
+
+		it("T-PS-14: a non-empty override wins over the default", () => {
+			expect(resolveEndpoint("openai", "http://localhost:1234")).toBe("http://localhost:1234");
+		});
+
+		it("T-PS-15: empty-string override is a FatalLLMError, not a silent passthrough", () => {
+			// `??` would accept `""`, producing a relative URL at the fetch layer.
+			// Guard ensures callers surface config bugs loudly, aligned with the
+			// file-wide convention for other programmer-error cases.
+			expect(() => resolveEndpoint("openai", "")).toThrow(FatalLLMError);
+			expect(() => resolveEndpoint("openai", "")).toThrow(/must be a non-empty URL/);
 		});
 	});
 });
