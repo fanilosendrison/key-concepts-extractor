@@ -36,8 +36,8 @@ export async function runCommand(
 	// Pre-create RunManager so we know runDir before runPipeline starts, and can
 	// subscribe to live events for stdout streaming (NIB-M-CLI §2.1).
 	const runManager = createRunManager(join(startup.baseDir, "runs"));
-	const logger = createEventLogger(runManager.runDir);
-	const unsubscribe = logger.subscribe((event) => {
+	const eventLogger = createEventLogger(runManager.runDir);
+	const unsubscribe = eventLogger.subscribe((event) => {
 		console.log(formatEvent(event));
 	});
 	console.log(`Run ${runManager.runId} — started`);

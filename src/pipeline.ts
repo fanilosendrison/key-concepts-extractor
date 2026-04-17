@@ -24,6 +24,7 @@ import {
 	type TerminalEventType,
 } from "./domain/types.js";
 import { createEventLogger } from "./infra/event-logger.js";
+import { logger } from "./infra/logger.js";
 import { createRunManager, type RunManager } from "./infra/run-manager.js";
 
 export interface PipelineDeps {
@@ -63,7 +64,7 @@ export async function runPipeline(
 	const config = deps.config ?? DEFAULT_RUN_CONFIG;
 	// initRun is idempotent: safe whether the caller already initialized or not.
 	await runManager.initRun(config, deps.source ?? "cli");
-	const logger = createEventLogger(runManager.runDir);
+	const eventLogger = createEventLogger(runManager.runDir);
 
 	// Fire-and-forget: intermediate events tolerate loss on crash because
 	// the pipeline keeps emitting. Terminal events use emitTerminal below.
@@ -72,34 +73,31 @@ export async function runPipeline(
 		type: PipelineEventType,
 		payload: Record<string, unknown>,
 	) => {
-		void logger.emit({ phase, type, payload });
+		void eventLogger.emit({ phase, type, payload });
 	};
 
 	// Terminal events must reach subscribers before the CLI process exits.
 	// A failed flush can't shadow the run result, but we MUST surface the
-	// failure on stderr — otherwise a logger I/O error (disk full, fd leak)
-	// would leave the CLI exiting silently with a non-zero code and no
-	// message. The persisted run state is authoritative; stderr is the
-	// fallback channel when the subscriber path is broken.
+	// failure to the diagnostic log — otherwise an event-logger I/O error
+	// (disk full, fd leak) would leave the CLI exiting silently with a
+	// non-zero code and no message. The persisted run state is authoritative;
+	// the pino logger is the fallback channel when the subscriber path breaks.
 	const emitTerminal = async (
 		type: TerminalEventType,
 		payload: Record<string, unknown>,
 	): Promise<void> => {
 		try {
-			await logger.emit({ phase: "run", type, payload });
+			await eventLogger.emit({ phase: "run", type, payload });
 		} catch (err) {
-			// logger.emit appendFile + dispatch to subscribers — a throw here
-			// means persistence (or serialization) failed and the subscriber
-			// path never fired. Wrap console.error too: on a piped stderr
-			// whose reader died (EPIPE), a throw here would shadow the run
-			// result and leak as an unhandled rejection.
-			try {
-				console.error(
-					`[emit-terminal] event emission failed for ${type} (subscribers not notified): ${errorMessage(err)}`,
-				);
-			} catch {
-				// stderr closed or full — nothing left to do; run state is authoritative.
-			}
+			// eventLogger.emit appendFile + dispatch to subscribers — a throw
+			// here means persistence (or serialization) failed and the
+			// subscriber path never fired. pino swallows its own I/O errors,
+			// so we don't need a secondary guard: the run state is
+			// authoritative, the log line is best-effort diagnostic.
+			logger.error(
+				{ type, err: errorMessage(err) },
+				"emit-terminal: event emission failed (subscribers not notified)",
+			);
 		}
 	};
 
@@ -266,7 +264,7 @@ export async function runPipeline(
 		});
 		await emitTerminal("run_complete", {
 			total_concepts: coverage.concepts.length,
-			run_dir: runManager.runDir,
+			output_dir: runManager.runDir,
 		});
 
 		return { runId: runManager.runId, status: "completed" };

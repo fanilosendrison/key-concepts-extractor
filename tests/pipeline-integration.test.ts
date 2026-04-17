@@ -4,12 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FatalLLMError } from "../src/domain/errors.js";
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../src/domain/ports.js";
-import {
-	DEFAULT_RUN_CONFIG,
-	type PipelineEvent,
-	type RunConfig,
-	type TerminalEventType,
-} from "../src/domain/types.js";
+import { DEFAULT_RUN_CONFIG, type PipelineEvent, type RunConfig } from "../src/domain/types.js";
 import { createEventLogger } from "../src/infra/event-logger.js";
 import { createRunManager } from "../src/infra/run-manager.js";
 import { runPipeline } from "../src/pipeline.js";
@@ -119,12 +114,12 @@ describe("Pipeline integration", () => {
 		async function collectTerminal(
 			run: () => Promise<{ runId: string }>,
 			runDir: string,
-		): Promise<TerminalEventType | null> {
-			const logger = createEventLogger(runDir);
-			let terminal: TerminalEventType | null = null;
-			const unsubscribe = logger.subscribe((event: PipelineEvent) => {
+		): Promise<PipelineEvent | null> {
+			const eventLogger = createEventLogger(runDir);
+			let terminal: PipelineEvent | null = null;
+			const unsubscribe = eventLogger.subscribe((event: PipelineEvent) => {
 				if (event.phase === "run" && terminal === null) {
-					terminal = event.type as TerminalEventType;
+					terminal = event;
 				}
 			});
 			try {
@@ -135,7 +130,7 @@ describe("Pipeline integration", () => {
 			}
 		}
 
-		it("delivers run_complete on success", async () => {
+		it("delivers run_complete on success with NIB-S-KCE §7 payload (total_concepts + output_dir)", async () => {
 			const runManager = createRunManager(join(baseDir, "runs"));
 			const harness = createPipelineHarness();
 			const terminal = await collectTerminal(
@@ -146,10 +141,24 @@ describe("Pipeline integration", () => {
 					),
 				runManager.runDir,
 			);
-			expect(terminal).toBe("run_complete");
+			// Explicit non-null guard: null would make every subsequent
+			// `terminal?.payload.x` throw an opaque TypeError instead of a
+			// clear "terminal event never arrived" diagnostic — the exact
+			// fire-and-forget regression this suite guards against.
+			expect(terminal).not.toBeNull();
+			expect(terminal?.type).toBe("run_complete");
+			// NIB-S-KCE §7 line 608 : payload carries { total_concepts, output_dir }.
+			// Pin both keys AND the shape (non-negative integer, not NaN/∞) so
+			// a rename OR a regression turning the field into `undefined + 0`
+			// fails this test instead of silently drifting.
+			const total = terminal?.payload.total_concepts;
+			expect(typeof total).toBe("number");
+			expect(Number.isInteger(total)).toBe(true);
+			expect(total as number).toBeGreaterThanOrEqual(0);
+			expect(terminal?.payload.output_dir).toBe(runManager.runDir);
 		});
 
-		it("delivers run_error on fatal failure", async () => {
+		it("delivers run_error on fatal failure with { error, fatal } payload", async () => {
 			const runManager = createRunManager(join(baseDir, "runs"));
 			const throwing: ProviderAdapter = {
 				provider: "anthropic",
@@ -163,7 +172,13 @@ describe("Pipeline integration", () => {
 					runPipeline({ prompt: "test" }, { ...harness, anthropic: throwing, baseDir, runManager }),
 				runManager.runDir,
 			);
-			expect(terminal).toBe("run_error");
+			expect(terminal).not.toBeNull();
+			expect(terminal?.type).toBe("run_error");
+			// Pin the payload keys consumed by WS/UI (format-event.ts :86-89) and
+			// by the `fatal` boolean surfacing. A regression that dropped `fatal`
+			// would break downstream telemetry without flagging it here otherwise.
+			expect(typeof terminal?.payload.error).toBe("string");
+			expect(terminal?.payload.fatal).toBe(true);
 		});
 
 		it("delivers run_stopped on abort", async () => {
@@ -193,7 +208,12 @@ describe("Pipeline integration", () => {
 					),
 				runManager.runDir,
 			);
-			expect(terminal).toBe("run_stopped");
+			expect(terminal).not.toBeNull();
+			expect(terminal?.type).toBe("run_stopped");
+			// pipeline.ts:108 emits `{ reason: "user_requested" }` on graceful abort.
+			// Lock the reason so a future variant (e.g. "timeout") can be added
+			// without silently replacing the existing one.
+			expect(terminal?.payload.reason).toBe("user_requested");
 		});
 	});
 

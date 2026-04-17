@@ -111,35 +111,43 @@ export interface InputFile {
 	content: string;
 }
 
-export type PipelinePhase =
-	| "input"
-	| "extraction"
-	| "fusion_intra"
-	| "fusion_inter"
-	| "diagnostics"
-	| "run";
+// Exported as `as const` tuple so downstream (e.g. the zod PipelineEventSchema
+// in cli/format-event.ts) can derive a runtime enum from the same source of
+// truth — adding a phase in one place and forgetting the other would otherwise
+// turn legitimate events into "(malformed event skipped)" silently.
+export const PIPELINE_PHASES = [
+	"input",
+	"extraction",
+	"fusion_intra",
+	"fusion_inter",
+	"diagnostics",
+	"run",
+] as const;
+export type PipelinePhase = (typeof PIPELINE_PHASES)[number];
 
 // NIB-M-EVENT-LOGGER §2 — closed union. Every emit must pass one of these ;
 // adding a new event type requires amending both NIB-M-EVENT-LOGGER §2 and §4.
-export type PipelineEventType =
-	| "input_processed"
-	| "extraction_start"
-	| "extraction_complete"
-	| "extraction_error"
-	| "extraction_progress"
-	| "concept_dropped"
-	| "fusion_intra_start"
-	| "fusion_intra_complete"
-	| "fusion_inter_start"
-	| "fusion_inter_complete"
-	| "control_start"
-	| "control_complete"
-	| "control_result"
-	| "quality_warning"
-	| "coverage_complete"
-	| "run_complete"
-	| "run_error"
-	| "run_stopped";
+export const PIPELINE_EVENT_TYPES = [
+	"input_processed",
+	"extraction_start",
+	"extraction_complete",
+	"extraction_error",
+	"extraction_progress",
+	"concept_dropped",
+	"fusion_intra_start",
+	"fusion_intra_complete",
+	"fusion_inter_start",
+	"fusion_inter_complete",
+	"control_start",
+	"control_complete",
+	"control_result",
+	"quality_warning",
+	"coverage_complete",
+	"run_complete",
+	"run_error",
+	"run_stopped",
+] as const;
+export type PipelineEventType = (typeof PIPELINE_EVENT_TYPES)[number];
 
 // Events that close the run; the CLI subscriber must receive them before process exit.
 export type TerminalEventType = Extract<

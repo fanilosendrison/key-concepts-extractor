@@ -2,8 +2,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { PipelineEvent, RunManifest } from "../../domain/types.js";
-import { formatEvent } from "../format-event.js";
+import type { RunManifest } from "../../domain/types.js";
+import { formatEvent, parseEventLine } from "../format-event.js";
 
 export async function showCommand(runId: string, baseDir: string): Promise<number> {
 	const runDir = join(baseDir, "runs", runId);
@@ -25,13 +25,15 @@ export async function showCommand(runId: string, baseDir: string): Promise<numbe
 		for (const line of raw.split("\n").filter(Boolean)) {
 			// events.jsonl is appended non-atomically; a partial line from a
 			// SIGKILL'd pipeline is a realistic scenario precisely on the runs
-			// `show` is most useful for. Skip malformed lines rather than crash.
-			try {
-				const ev = JSON.parse(line) as PipelineEvent;
-				console.log(formatEvent(ev));
-			} catch {
+			// `show` is most useful for. parseEventLine validates the full
+			// envelope via zod — returns null on JSON or schema failure rather
+			// than crashing.
+			const ev = parseEventLine(line);
+			if (ev === null) {
 				console.error(`(malformed event skipped: ${line.slice(0, 80)})`);
+				continue;
 			}
+			console.log(formatEvent(ev));
 		}
 	} else {
 		console.log("(no events.jsonl)");
