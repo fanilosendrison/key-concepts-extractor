@@ -287,12 +287,13 @@ export function getTerm(c: ControllableConcept): string {
 	return "term" in c ? c.term : c.canonical_term;
 }
 
-// Build a split-derived concept. Per NIB-M-QC §4.4: inherit category,
-// granularity, and explicit_in_source from the parent (those hold after
-// splitting), but RESET provenance fields — found_by_models / consensus /
-// angle_provenance / angles_count / justifications were recorded about the
-// merged cluster and do not apply to each split piece. Set derived_from so
-// downstream (diagnostics, coverage) can treat synthetic concepts honestly.
+// Fork a split-derived concept from a parent cluster. Per NIB-M-QC §4.4:
+// inherit category, granularity, and explicit_in_source (those hold after
+// splitting), but RESET all provenance fields — variants, found_by_models,
+// consensus, justifications (MergedConcept) / angle_provenance, angles_count,
+// justifications (FinalConcept) were recorded about the merged cluster and
+// do not apply to each split piece. Set derived_from so downstream
+// (diagnostics, coverage) can treat synthetic concepts honestly.
 //
 // NOTE on the "1/3" / "1/5" placeholders: Consensus and AnglesCount are
 // closed enum types with no "unknown" or "derived" value. A split concept
@@ -303,7 +304,12 @@ export function getTerm(c: ControllableConcept): string {
 // (see coverage-verifier.isFragile, diagnostics.ts empty-array guards).
 // Widening the enums to carry a "derived" marker is a larger refactor —
 // deferred until a reader genuinely needs per-provenance branching.
-export function withTerm<T extends ControllableConcept>(concept: T, term: string): T {
+//
+// Naming: `deriveSplit` (not `withTerm`) because the function is NOT a
+// generic term-updater — it is the split constructor for NIB-M-QC §4.4,
+// and it rewrites provenance. Any new provenance field on MergedConcept /
+// FinalConcept MUST be explicitly reset or inherited here.
+export function deriveSplit<T extends ControllableConcept>(concept: T, term: string): T {
 	if ("term" in concept) {
 		const out: MergedConcept = {
 			...concept,

@@ -12,10 +12,10 @@ import type { ProviderAdapter } from "./ports.js";
 import {
 	type ControllableConcept,
 	type ControlScope,
+	deriveSplit,
 	getTerm,
 	type QualityCorrection,
 	type QualityReport,
-	withTerm,
 } from "./types.js";
 
 export interface QualityInput<T extends ControllableConcept> {
@@ -271,7 +271,12 @@ function splitCluster<T extends ControllableConcept>(
 	const target = list[targetIdx];
 	if (!target) return list;
 
-	// NIB-M-QC §4.4 inheritance : only term/variants change, all other fields inherited as-is.
-	const splits: T[] = correction.suggested_split.map((term) => withTerm(target, term));
+	// NIB-M-QC §4.4 inheritance : category/granularity/explicit_in_source carry
+	// over from the parent ; term/variants are overridden by the split term ;
+	// all provenance fields (found_by_models, consensus, angle_provenance,
+	// angles_count, justifications) are RESET by `deriveSplit` because the
+	// parent's provenance was about the merged cluster, not each split piece.
+	// `derived_from` is set to the parent term so downstream can trace the fork.
+	const splits: T[] = correction.suggested_split.map((term) => deriveSplit(target, term));
 	return [...list.slice(0, targetIdx), ...splits, ...list.slice(targetIdx + 1)];
 }
