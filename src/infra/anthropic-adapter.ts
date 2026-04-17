@@ -1,5 +1,6 @@
 import type { LLMRequest, LLMResponse, ProviderAdapter } from "../domain/ports.js";
 import {
+	checkFinishReason,
 	classifyHttp,
 	composeSignal,
 	type ProviderAdapterConfig,
@@ -55,7 +56,17 @@ export function createAnthropicAdapter(config: ProviderAdapterConfig): ProviderA
 					if (!res.ok) {
 						throw classifyHttp(res.status, await res.text());
 					}
-					const data = (await res.json()) as { content: AnthropicBlock[] };
+					const data = (await res.json()) as {
+						content: AnthropicBlock[];
+						stop_reason: string;
+					};
+					// DC-ANTHROPIC §6: max_tokens truncation is retriable. Anthropic has
+					// no safety-filter stop_reason — use a sentinel that will never match
+					// so checkFinishReason only fires on truncation.
+					checkFinishReason("anthropic", data.stop_reason, {
+						truncation: "max_tokens",
+						safety: "__anthropic_no_safety_stop_reason__",
+					});
 					const textBlock = data.content.find((b): b is AnthropicTextBlock => b.type === "text");
 					if (!textBlock) {
 						throw new Error("No text block in Anthropic response");
