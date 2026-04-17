@@ -14,12 +14,13 @@ fi
 # Install gh via direct binary download (bypass apt entirely).
 # The cloud env has pre-installed node/jq; broken 3rd-party PPAs
 # (deadsnakes, ondrej/php) cause `apt-get update` to fail with 403.
-# Direct binary install avoids the entire apt machinery.
+# Pinned version avoids github.com API rate limits on shared cloud IPs
+# (anon GitHub API = 60 req/h per IP, frequently exhausted).
+# Bump GH_VERSION manually when needed.
+readonly GH_VERSION="2.64.0"
 if ! command -v gh >/dev/null 2>&1; then
-	echo "Installing gh CLI via direct binary download..."
+	echo "Installing gh CLI ${GH_VERSION} via direct binary download..."
 	GH_ARCH="$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-	GH_VERSION="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | grep -oE '"tag_name":\s*"v[0-9.]+"' | grep -oE '[0-9.]+')"
-	[[ -z "$GH_VERSION" ]] && { echo "ERROR: could not determine latest gh version" >&2; exit 1; }
 	GH_TARBALL="gh_${GH_VERSION}_linux_${GH_ARCH}"
 	curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_TARBALL}.tar.gz" -o /tmp/gh.tar.gz
 	tar -xzf /tmp/gh.tar.gz -C /tmp
