@@ -104,9 +104,21 @@ export function createRunManager(baseDir: string, runId?: string): RunManager {
 	const runDir = join(baseDir, id);
 	const manifestPath = join(runDir, "manifest.json");
 
-	const updateManifest = async (patch: Partial<RunManifest>): Promise<void> => {
-		const current = await readJson<RunManifest>(manifestPath);
-		await writeJson(manifestPath, { ...current, ...patch });
+	// Serialize manifest mutations per-runDir: without this chain, two concurrent
+	// updateManifest callers (e.g. pipeline `setInputFiles` racing with a DELETE
+	// `stopRun`) both read the pre-patch manifest and the later writeJson wins,
+	// silently dropping the other patch. The chain forces strict read-modify-write
+	// ordering. Reject-safe: a failing write is swallowed on the chain itself
+	// (so later callers keep a clean baseline) but the rejection is still thrown
+	// to the caller that triggered it.
+	let writeChain: Promise<void> = Promise.resolve();
+	const updateManifest = (patch: Partial<RunManifest>): Promise<void> => {
+		const next = writeChain.then(async () => {
+			const current = await readJson<RunManifest>(manifestPath);
+			await writeJson(manifestPath, { ...current, ...patch });
+		});
+		writeChain = next.catch(() => undefined);
+		return next;
 	};
 
 	const isTerminal = (status: RunManifest["status"]): boolean =>

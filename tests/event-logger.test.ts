@@ -32,7 +32,7 @@ describe("EventLogger", () => {
 	it("T-EL-02: multiple emits append", async () => {
 		const logger = createEventLogger(runDir);
 		for (let i = 0; i < 3; i++) {
-			await logger.emit({ phase: "extraction", type: "tick", payload: { i } });
+			await logger.emit({ phase: "extraction", type: "extraction_progress", payload: { i } });
 		}
 		const lines = readFileSync(join(runDir, "events.jsonl"), "utf-8").trim().split("\n");
 		expect(lines).toHaveLength(3);
@@ -41,7 +41,7 @@ describe("EventLogger", () => {
 	it("T-EL-03: getEvents returns all", async () => {
 		const logger = createEventLogger(runDir);
 		for (let i = 0; i < 5; i++) {
-			await logger.emit({ phase: "run", type: "tick", payload: { i } });
+			await logger.emit({ phase: "run", type: "extraction_progress", payload: { i } });
 		}
 		const events = await logger.getEvents();
 		expect(events).toHaveLength(5);
@@ -50,7 +50,7 @@ describe("EventLogger", () => {
 	it("P-04: append-only", async () => {
 		const logger = createEventLogger(runDir);
 		for (let i = 0; i < 7; i++) {
-			await logger.emit({ phase: "run", type: "tick", payload: {} });
+			await logger.emit({ phase: "run", type: "extraction_progress", payload: {} });
 		}
 		const events = await logger.getEvents();
 		expect(events.length).toBe(7);

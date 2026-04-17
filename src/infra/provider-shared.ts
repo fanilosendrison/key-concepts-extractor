@@ -52,12 +52,14 @@ function assertNumberMs(
 
 // Reject NaN / Infinity / non-positive / non-integer. AbortSignal.timeout
 // truncates floats via ToUint32, so 0.5 silently becomes 0 (already-aborted).
+/** @param name Caller identifier in the form "functionName: paramName" (used in thrown error message). */
 function assertPositiveIntegerMs(name: string, value: number): void {
 	assertNumberMs(name, value, (n) => Number.isInteger(n) && n > 0, "a positive integer");
 }
 
 // Reject NaN / Infinity / negative. Zero IS allowed (used by T-PS-07 to force
 // an immediate budget trip on attempt > 0).
+/** @param name Caller identifier in the form "functionName: paramName" (used in thrown error message). */
 function assertNonNegativeFiniteMs(name: string, value: number): void {
 	assertNumberMs(name, value, (n) => Number.isFinite(n) && n >= 0, "a non-negative finite number");
 }

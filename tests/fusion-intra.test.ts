@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { fuseIntraAngle } from "../src/domain/fusion-intra.js";
+import type { ConceptCategory } from "../src/domain/types.js";
 import { rawConcept } from "./helpers/factories.js";
 
-const rc = (term: string, category = "property", explicit = true) =>
+const rc = (term: string, category: ConceptCategory = "property", explicit = true) =>
 	rawConcept({ term, category, explicit_in_source: explicit });
 
 describe("FusionIntraAngle", () => {

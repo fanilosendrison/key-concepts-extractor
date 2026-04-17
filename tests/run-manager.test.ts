@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RUN_CONFIG } from "../src/domain/types.js";
 import { logger } from "../src/infra/logger.js";
 import { createRunManager, listRuns } from "../src/infra/run-manager.js";
+import { rawConcept } from "./helpers/factories.js";
 import { cleanupTempDir, createTempDir } from "./helpers/temp-dir.js";
 
 describe("RunManager", () => {
@@ -46,7 +47,7 @@ describe("RunManager", () => {
 	it("T-RM-03: persist extraction pass", async () => {
 		const rm = createRunManager(baseDir);
 		await rm.initRun(DEFAULT_RUN_CONFIG, "cli");
-		const concepts = [{ term: "a", category: "property", explicit_in_source: true }];
+		const concepts = [rawConcept({ term: "a" })];
 		await rm.persistExtractionPass("etats_ideaux", "claude", concepts);
 		const file = join(rm.runDir, "extraction", "etats_ideaux-claude.json");
 		expect(existsSync(file)).toBe(true);
