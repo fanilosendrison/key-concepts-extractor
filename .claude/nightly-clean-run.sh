@@ -21,6 +21,16 @@ readonly SKIP_LABEL="wip-review"
 readonly TODAY="$(date -u +%Y-%m-%d)"
 readonly ARCHIVE_TAG="nightly-clean-archive-${TODAY}"
 
+# Parse owner/repo from origin URL (ssh or https). `gh pr *` defaults to
+# auto-detection but that fails in sandboxed cloud envs where the git remote
+# doesn't resolve against a known GitHub host — pass --repo explicitly.
+_repo_slug() {
+	local url
+	url=$(git config --get remote.origin.url 2>/dev/null || echo "")
+	echo "$url" | sed -E 's|^git@github\.com:||; s|^https?://github\.com/||; s|\.git$||'
+}
+readonly REPO_SLUG="$(_repo_slug)"
+
 _log() { echo "[nightly-clean-run] $*"; }
 _warn() { echo "[nightly-clean-run] WARN: $*" >&2; }
 _err() { echo "[nightly-clean-run] ERROR: $*" >&2; exit 2; }
@@ -44,14 +54,14 @@ _default_branch() {
 }
 
 _current_pr_number() {
-	gh pr list --head "$BRANCH" --state open --json number \
+	gh pr list --repo "$REPO_SLUG" --head "$BRANCH" --state open --json number \
 		--jq '.[0].number // empty' 2>/dev/null || true
 }
 
 _has_skip_label() {
 	local pr="$1"
 	[[ -z "$pr" ]] && return 1
-	gh pr view "$pr" --json labels --jq ".labels[].name" 2>/dev/null \
+	gh pr view "$pr" --repo "$REPO_SLUG" --json labels --jq ".labels[].name" 2>/dev/null \
 		| grep -qxF "$SKIP_LABEL"
 }
 
@@ -132,15 +142,19 @@ cmd_pre() {
 
 cmd_post() {
 	command -v gh >/dev/null 2>&1 || _err "gh CLI not installed"
+	[[ -z "$REPO_SLUG" ]] && _err "cannot parse owner/repo from origin URL"
 
 	local default
 	default=$(_default_branch) || _err "cannot determine default branch in post"
 
-	# Scope add: known cleanup targets + common source dirs.
-	local -a scoped_paths=(backlog.md .claude/nightly-runs.log)
-	git add "${scoped_paths[@]}" 2>/dev/null || true
-	for dir in src lib app pkg internal; do
-		[[ -d "$dir" ]] && git add "$dir" 2>/dev/null || true
+	# Stage all modifications to already-tracked files (src, tests, lib, docs,
+	# config, etc.). `-u` only touches tracked paths — safe from accidental
+	# adds of stray files produced by the agent.
+	git add -u
+	# Additionally add expected new/untracked files (backlog.md may be new,
+	# nightly-runs.log may be created by the tag-fallback path below).
+	for extra in backlog.md .claude/nightly-runs.log; do
+		[[ -f "$extra" ]] && git add "$extra"
 	done
 
 	if git diff --cached --quiet; then
@@ -148,7 +162,7 @@ cmd_post() {
 		local pr
 		pr=$(_current_pr_number)
 		if [[ -n "$pr" ]]; then
-			gh pr comment "$pr" --body "Nightly run produced no changes on $TODAY." \
+			gh pr comment "$pr" --repo "$REPO_SLUG" --body "Nightly run produced no changes on $TODAY." \
 				>/dev/null 2>&1 || _warn "gh pr comment failed"
 		fi
 		return 0
@@ -211,7 +225,7 @@ cmd_post() {
 	local pr
 	pr=$(_current_pr_number)
 	if [[ -z "$pr" ]]; then
-		if gh pr create --base "$default" --head "$BRANCH" \
+		if gh pr create --repo "$REPO_SLUG" --base "$default" --head "$BRANCH" \
 				--title "chore(nightly-clean): cleanup run $TODAY" \
 				--body "Automated nightly cleanup. Review and merge if looks good." \
 				>/dev/null 2>&1; then
@@ -222,7 +236,7 @@ cmd_post() {
 			[[ -n "$pr" ]] && _log "PR #$pr detected on retry" || _err "gh pr create failed and no PR exists"
 		fi
 	else
-		gh pr edit "$pr" \
+		gh pr edit "$pr" --repo "$REPO_SLUG" \
 			--title "chore(nightly-clean): cleanup run $TODAY" \
 			--body "Automated nightly cleanup. Latest run: $TODAY." \
 			>/dev/null 2>&1 || _warn "gh pr edit failed for PR #$pr"
