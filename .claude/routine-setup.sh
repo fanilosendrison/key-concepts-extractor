@@ -11,34 +11,31 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
 	exit 1
 fi
 
-_need_install=()
-command -v gh >/dev/null 2>&1 || _need_install+=(gh)
-command -v jq >/dev/null 2>&1 || _need_install+=(jq)
-command -v node >/dev/null 2>&1 || _need_install+=(nodejs)
-
-if [[ ${#_need_install[@]} -gt 0 ]]; then
-	echo "Installing: ${_need_install[*]}"
-	if ! command -v apt-get >/dev/null 2>&1; then
-		echo "ERROR: apt-get not available; cannot auto-install ${_need_install[*]}." >&2
-		exit 1
-	fi
-	sudo apt-get -qq update
-
-	if [[ " ${_need_install[*]} " == *" gh "* ]]; then
-		type -p curl >/dev/null || sudo apt-get -qq install -y curl
-		sudo mkdir -p -m 755 /etc/apt/keyrings
-		curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-			| sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
-		sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-			| sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-		sudo apt-get -qq update
-	fi
-	sudo apt-get -qq install -y "${_need_install[@]}"
+# Install gh via direct binary download (bypass apt entirely).
+# The cloud env has pre-installed node/jq; broken 3rd-party PPAs
+# (deadsnakes, ondrej/php) cause `apt-get update` to fail with 403.
+# Direct binary install avoids the entire apt machinery.
+if ! command -v gh >/dev/null 2>&1; then
+	echo "Installing gh CLI via direct binary download..."
+	GH_ARCH="$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+	GH_VERSION="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | grep -oE '"tag_name":\s*"v[0-9.]+"' | grep -oE '[0-9.]+')"
+	[[ -z "$GH_VERSION" ]] && { echo "ERROR: could not determine latest gh version" >&2; exit 1; }
+	GH_TARBALL="gh_${GH_VERSION}_linux_${GH_ARCH}"
+	curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_TARBALL}.tar.gz" -o /tmp/gh.tar.gz
+	tar -xzf /tmp/gh.tar.gz -C /tmp
+	sudo install "/tmp/${GH_TARBALL}/bin/gh" /usr/local/bin/gh
+	rm -rf /tmp/gh.tar.gz "/tmp/${GH_TARBALL}"
+	echo "gh installed: $(gh --version | head -1)"
 fi
 
+# jq and node should be pre-installed on Anthropic cloud env. If somehow
+# missing, fail loudly with an actionable message rather than apt-hell.
 for bin in gh jq node; do
-	command -v "$bin" >/dev/null 2>&1 || { echo "ERROR: $bin still missing after install." >&2; exit 1; }
+	command -v "$bin" >/dev/null 2>&1 || {
+		echo "ERROR: $bin missing from cloud env and cannot be auto-installed reliably." >&2
+		echo "  Add it to the environment setup script via claude.ai/code env config." >&2
+		exit 1
+	}
 done
 
 # Clone cc-skills vendor repo fresh each run. Path into .claude/ directly so
