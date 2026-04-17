@@ -154,15 +154,15 @@ cmd_post() {
 	# Additionally add expected new/untracked files (backlog.md may be new,
 	# nightly-runs.log may be created by the tag-fallback path below).
 	for extra in backlog.md .claude/nightly-runs.log; do
-		[[ -f "$extra" ]] && git add "$extra"
+		[[ -f "\$extra" ]] && git add "\$extra"
 	done
 
 	if git diff --cached --quiet; then
 		_log "no changes produced by nightly run — nothing to push"
 		local pr
 		pr=$(_current_pr_number)
-		if [[ -n "$pr" ]]; then
-			gh pr comment "$pr" --repo "$REPO_SLUG" --body "Nightly run produced no changes on $TODAY." \
+		if [[ -n "\$pr" ]]; then
+			gh pr comment "\$pr" --repo "\$REPO_SLUG" --body "Nightly run produced no changes on \$TODAY." \
 				>/dev/null 2>&1 || _warn "gh pr comment failed"
 		fi
 		return 0
@@ -224,23 +224,23 @@ cmd_post() {
 	# Upsert PR.
 	local pr
 	pr=$(_current_pr_number)
-	if [[ -z "$pr" ]]; then
-		if gh pr create --repo "$REPO_SLUG" --base "$default" --head "$BRANCH" \
-				--title "chore(nightly-clean): cleanup run $TODAY" \
-				--body "Automated nightly cleanup. Review and merge if looks good." \
+	if [[ -z "\$pr" ]]; then
+		if gh pr create --repo "\$REPO_SLUG" --base "\$default" --head "\$BRANCH" \\
+				--title "chore(nightly-clean): cleanup run \$TODAY" \\
+				--body "Automated nightly cleanup. Review and merge if looks good." \\
 				>/dev/null 2>&1; then
 			_log "opened new PR"
 		else
 			_warn "gh pr create failed; checking again"
-			pr=$(_current_pr_number)
-			[[ -n "$pr" ]] && _log "PR #$pr detected on retry" || _err "gh pr create failed and no PR exists"
+			pr=\$(_current_pr_number)
+			[[ -n "\$pr" ]] && _log "PR #\$pr detected on retry" || _err "gh pr create failed and no PR exists"
 		fi
 	else
-		gh pr edit "$pr" --repo "$REPO_SLUG" \
-			--title "chore(nightly-clean): cleanup run $TODAY" \
-			--body "Automated nightly cleanup. Latest run: $TODAY." \
-			>/dev/null 2>&1 || _warn "gh pr edit failed for PR #$pr"
-		_log "updated PR #$pr"
+		gh pr edit "\$pr" --repo "\$REPO_SLUG" \\
+			--title "chore(nightly-clean): cleanup run \$TODAY" \\
+			--body "Automated nightly cleanup. Latest run: \$TODAY." \\
+			>/dev/null 2>&1 || _warn "gh pr edit failed for PR #\$pr"
+		_log "updated PR #\$pr"
 	fi
 }
 

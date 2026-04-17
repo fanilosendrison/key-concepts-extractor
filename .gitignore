@@ -87,3 +87,5 @@ CLAUDE.md
 .claude/*
 !.claude/routine-setup.sh
 !.claude/nightly-clean-run.sh
+!.claude/agents/
+!.claude/agents/**
