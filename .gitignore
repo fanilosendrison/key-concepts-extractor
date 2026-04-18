@@ -85,6 +85,7 @@ CLAUDE.md
 
 # ---------- nightly-clean enrollment ----------
 .claude/*
+.claude/run/
 !.claude/routine-setup.sh
 !.claude/nightly-clean-run.sh
 !.claude/agents/
