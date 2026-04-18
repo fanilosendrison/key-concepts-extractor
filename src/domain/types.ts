@@ -176,6 +176,10 @@ export interface RunConfig {
 }
 
 // Defaults per NIB-S-KCE §3.15 "Defaults" table (subset).
+// NOTE: Model version strings are intentionally hardcoded — they serve as
+// compile-time defaults when no RunConfig override is provided. Update these
+// when the project upgrades its baseline model targets. Runtime overrides
+// should be passed through RunConfig (e.g. via CLI flags or web request body).
 export const DEFAULT_RUN_CONFIG: RunConfig = {
 	models: {
 		anthropic: "claude-opus-4-6",

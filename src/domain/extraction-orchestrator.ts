@@ -1,4 +1,4 @@
-import { TransientLLMError } from "./errors.js";
+import { PipelineAbortError, TransientLLMError } from "./errors.js";
 import type { EventPayloads } from "./event-schemas.js";
 import type { LLMRequest, ProviderAdapter } from "./ports.js";
 import {
@@ -174,9 +174,7 @@ export async function runExtraction(
 
 	for (const angle of CANONICAL_ANGLES) {
 		if (deps.signal?.aborted) {
-			const err = new Error("Pipeline aborted");
-			(err as Error & { aborted?: boolean }).aborted = true;
-			throw err;
+			throw new PipelineAbortError();
 		}
 		deps.emit?.("extraction_progress", {
 			completed: allPasses.length,
