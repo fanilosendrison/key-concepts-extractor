@@ -66,13 +66,17 @@ _has_skip_label() {
 }
 
 _has_non_claude_commits() {
+	local default="$1"
 	local bot_email="${CLAUDE_COMMITTER_EMAIL:-claude-nightly@anthropic.com}"
 	if ! git fetch origin "$BRANCH" 2>/dev/null; then
 		_warn "fetch of origin/$BRANCH failed; assuming non-Claude commits present"
 		return 0
 	fi
+	# Only inspect commits exclusive to the nightly branch (not already on
+	# default). Without the exclusion the full repo history is walked and
+	# every pre-enrollment commit trips the check.
 	local commits
-	commits=$(git log "origin/$BRANCH" --pretty='%ae|%s' 2>/dev/null || true)
+	commits=$(git log "origin/$BRANCH" "^origin/$default" --pretty='%ae|%s' 2>/dev/null || true)
 	[[ -z "$commits" ]] && return 1
 	while IFS='|' read -r email subject; do
 		if [[ "$email" != "$bot_email" ]] && [[ ! "$subject" =~ nightly-clean ]]; then
@@ -106,7 +110,7 @@ cmd_pre() {
 			_log "SKIP: open PR #$pr has label $SKIP_LABEL"
 			exit 1
 		fi
-		if _has_non_claude_commits; then
+		if _has_non_claude_commits "$default"; then
 			_log "SKIP: non-Claude commits detected on origin/$BRANCH"
 			exit 1
 		fi
