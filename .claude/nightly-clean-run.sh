@@ -205,7 +205,7 @@ cmd_post() {
 				_log "FALLBACK: tag create failed; writing to .claude/nightly-runs.log"
 				mkdir -p .claude
 				echo "$TODAY archive_sha=$prev_sha" >> .claude/nightly-runs.log
-				git add .claude/nightly-runs.log
+				git add -f .claude/nightly-runs.log
 				archive_fallback_written=1
 			fi
 		fi
@@ -231,7 +231,7 @@ cmd_post() {
 			git tag -d "$ARCHIVE_TAG" >/dev/null 2>&1 || true
 			mkdir -p .claude
 			echo "$TODAY archive_sha=$prev_sha" >> .claude/nightly-runs.log
-			git add .claude/nightly-runs.log
+			git add -f .claude/nightly-runs.log
 			if ! git -c "user.name=$author_name" -c "user.email=$author_email" \
 					commit --amend --no-edit >/dev/null 2>&1; then
 				_warn "amend failed; continuing without log in commit"
