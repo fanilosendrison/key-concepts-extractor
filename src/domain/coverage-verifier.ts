@@ -24,8 +24,11 @@ function escapeRegex(s: string): string {
 // Cache compiled regex per NFC-normalized term. verifyCoverage runs N concepts
 // × M variants regex compilations per invocation; the Unicode moteur is
 // noticeably slower than ASCII, so memoizing by term pays off on larger runs.
-// Map is module-scoped — fine for a single-process CLI, never grows unbounded
-// beyond the set of distinct terms extracted across runs in the same process.
+// Map is module-scoped — fine for a single-process CLI. Capped at 10 000
+// entries to prevent unbounded growth when the same process handles many
+// sequential runs (web server mode). LRU eviction is overkill here — a simple
+// full-clear keeps the fast path allocation-free for the common case.
+const PATTERN_CACHE_MAX = 10_000;
 const patternCache = new Map<string, RegExp>();
 
 // Unicode-aware word boundary.
@@ -47,6 +50,9 @@ function checkExplicit(term: string, sourceText: string): boolean {
 	if (trimmed.length === 0) return false;
 	let pattern = patternCache.get(trimmed);
 	if (pattern === undefined) {
+		if (patternCache.size >= PATTERN_CACHE_MAX) {
+			patternCache.clear();
+		}
 		pattern = new RegExp(
 			`(?<![\\p{L}\\p{N}\\p{M}\\p{Pc}])${escapeRegex(trimmed)}(?![\\p{L}\\p{N}\\p{M}\\p{Pc}])`,
 			"iu",
