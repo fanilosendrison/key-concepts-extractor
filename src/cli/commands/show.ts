@@ -41,11 +41,9 @@ export async function showCommand(runId: string, baseDir: string): Promise<numbe
 				// terminal, bleed ANSI colors, or abort log viewers. C1 covers
 				// the ANSI CSI escape sequences a rogue writer might produce
 				// without the leading ESC — not hypothetical on shared logs.
-				// The control-char range is the entire point of the substitution,
-				// so silence biome's noControlCharactersInRegex here.
-				// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional scrub of control bytes from preview
 				const preview = line
 					.slice(0, 80)
+					// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional scrub of control bytes from preview
 					.replace(/[\x00-\x1f\x7f-\x9f]/g, "?")
 					.replace(/[\uD800-\uDBFF]$/, "");
 				console.error(`(malformed event skipped: ${preview})`);
