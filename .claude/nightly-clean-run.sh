@@ -151,9 +151,9 @@ cmd_post() {
 	local default
 	default=$(_default_branch) || _err "cannot determine default branch in post"
 
-	# Stage all modifications to already-tracked files (src, tests, lib, docs,
-	# config, etc.). `-u` only touches tracked paths — safe from accidental
-	# adds of stray files produced by the agent.
+	# Stage any tracked modifications left unstaged (e.g. LOOP_CLEAN_COMMIT_PER_ITER=1
+	# commits per iter, but a skill may still leave stragglers). `-u` only
+	# touches tracked paths — safe from accidental adds of stray files.
 	git add -u
 	# Additionally add expected new/untracked files (backlog.md may be new,
 	# nightly-runs.log may be created by the tag-fallback path below).
@@ -161,7 +161,25 @@ cmd_post() {
 		[[ -f "$extra" ]] && git add "$extra"
 	done
 
-	if git diff --cached --quiet; then
+	# Detect whether there is anything to push. Two independent sources:
+	#   (a) staged changes that still need a commit
+	#   (b) local commits ahead of the remote branch (or ahead of default
+	#       on a first run when the remote branch does not yet exist)
+	# With LOOP_CLEAN_COMMIT_PER_ITER=1 the fix work lives entirely in (b),
+	# so an early-return on "nothing staged" would skip push/tag/PR entirely.
+	local has_staged=0 has_new_commits=0
+	git diff --cached --quiet || has_staged=1
+	local compare_ref
+	if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+		compare_ref="origin/$BRANCH"
+	else
+		compare_ref="origin/$default"
+	fi
+	local ahead
+	ahead=$(git rev-list --count "$compare_ref..HEAD" 2>/dev/null || echo 0)
+	[[ "$ahead" -gt 0 ]] && has_new_commits=1
+
+	if [[ "$has_staged" -eq 0 && "$has_new_commits" -eq 0 ]]; then
 		_log "no changes produced by nightly run — nothing to push"
 		local pr
 		pr=$(_current_pr_number)
@@ -193,10 +211,17 @@ cmd_post() {
 		fi
 	fi
 
-	git -c "user.name=$author_name" -c "user.email=$author_email" \
-		commit -m "chore(nightly-clean): cleanup run $TODAY" \
-		-m "Automated /loop-clean + /backlog-deep-crush sweep."
-	_log "committed nightly changes"
+	# Commit only when something is staged. With per-iter commits, HEAD
+	# already carries the fix commits and `git commit` with an empty index
+	# would fail. The archive-fallback path above may have staged a log.
+	if ! git diff --cached --quiet; then
+		git -c "user.name=$author_name" -c "user.email=$author_email" \
+			commit -m "chore(nightly-clean): cleanup run $TODAY" \
+			-m "Automated /loop-clean + /backlog-deep-crush sweep."
+		_log "committed nightly changes"
+	else
+		_log "no staged changes (per-iter commits already on HEAD); proceeding to push"
+	fi
 
 	if [[ -n "$prev_sha" && "$archive_fallback_written" -eq 0 ]]; then
 		if git push origin "$ARCHIVE_TAG" 2>/dev/null; then

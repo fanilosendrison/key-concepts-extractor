@@ -91,6 +91,35 @@ Si tu détectes dup/dead code → ajouter dans le rapport : "Duplication/dead co
 - Comportement implicite dont dépendent d'autres modules sans test explicite
 - Condition de bord qui fonctionnait "par accident" et qui ne fonctionne plus
 
+### Axe 11 — Spec-drift direction
+
+S'applique **uniquement** si le fichier sous review vit dans `specs/*.md`. Si tu reviewes un fichier de `src/`, skip cet axe (il est traité sur le fichier specs correspondant).
+
+Filet de sécurité aval des gates de `fix-or-backlog`. Pour le spec modifié, lire le diff (`git diff HEAD~1 -- <file>` ou le diff courant) et appliquer ces checks :
+
+1. **Relaxation d'une règle normative** — chercher dans le diff les patterns :
+   - `readonly` retiré d'un champ, tableau, objet
+   - `required` → `optional` (ex : `foo: X` → `foo?: X`, ou `foo: X` supprimé du type)
+   - `as const` retiré
+   - Enum élargi sans justification
+   - Mot "obligatoire", "MUST", "DOIT", "requis", "explicitement" retiré d'une phrase adjacente
+   
+   Si au moins un pattern match **et** le diff ne contient pas une citation visible (nouveau NIB, DC, numéro d'invariant) qui justifie la relaxation → `critical`. C'est un bug de conformité de la chaîne outils.
+
+2. **Modification d'une surface publique** — extraire les noms de types modifiés dans le diff (lignes `+` ou `-` contenant `interface Foo` ou `type Foo`). Pour chacun, grep `src/index.ts` :
+   ```bash
+   grep -E "export (type )?\\{[^}]*\\b<Name>\\b|export (type )?\\* from" src/index.ts
+   ```
+   Si match → `critical`. Breaking change caché derrière un "alignement de spec" ; exige un nouveau NIB.
+
+3. **Incohérence cross-spec** — pour chaque type modifié, chercher dans les autres `specs/*.md` une déclaration (`interface X` ou `type X` dans un bloc ```typescript). Si déclaré dans ≥ 2 specs et que le diff n'en touche qu'un → `major`. Sources de vérité divergées.
+
+4. **Absence de tag de direction** — inspecter le dernier commit (`git log -1 --format=%s`) ou le message WIP en cours. Si le diff touche `specs/` mais qu'aucun des tags `[code→spec]`, `[spec→code:completion]`, `[escalated]` n'apparaît dans le titre → `notable`.
+
+Cas NON-finding : si le diff **crée** un nouveau fichier spec (nouveau NIB légitime), pas de finding. Un nouveau NIB n'est pas un drift.
+
+Axis label pour le JSON : `spec-drift-direction`.
+
 ## Calibration de sévérité
 
 Avant d'assigner une sévérité, applique ce test :
