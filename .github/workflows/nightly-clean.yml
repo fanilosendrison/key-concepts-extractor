@@ -1,0 +1,12 @@
+name: nightly-clean
+
+on:
+  schedule:
+    - cron: '8 2 * * *'   # 2:08 UTC daily (staggered from llm-runtime)
+  workflow_dispatch:
+
+jobs:
+  call:
+    uses: fanilosendrison/cc-ci/.github/workflows/nightly-clean-callable.yml@main
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

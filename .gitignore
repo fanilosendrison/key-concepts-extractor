@@ -32,10 +32,8 @@ __pycache__/
 *.so
 *.dll
 
-# ---------- Claude Code local state ----------
-# Use .claude/* (glob) not .claude/ so gitignore negations in the
-# nightly-clean block below can re-include specific files.
-.claude/*
+# ---------- Claude Code local state (nightly-clean uses GHA, clones dotclaude at runtime) ----------
+.claude/
 
 # ---------- IDE & Editor ----------
 .idea/
@@ -83,10 +81,3 @@ SPEC_MANIFEST.md
 LIBS_EVAL.yaml
 CLAUDE.md
 
-# ---------- nightly-clean enrollment ----------
-.claude/*
-.claude/run/
-!.claude/routine-setup.sh
-!.claude/nightly-clean-run.sh
-!.claude/agents/
-!.claude/agents/**
