@@ -5,6 +5,10 @@ on:
     - cron: '8 2 * * *'   # 2:08 UTC daily (staggered from llm-runtime)
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   call:
     uses: fanilosendrison/cc-ci/.github/workflows/nightly-clean-callable.yml@main
